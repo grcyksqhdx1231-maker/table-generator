@@ -1,0 +1,17 @@
+services:
+  - type: web
+    runtime: node
+    name: wabi-sabi-table-generator
+    plan: free
+    autoDeploy: true
+    buildCommand: npm install && npm run build
+    startCommand: npm run start
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: AI_PROVIDER
+        value: deepseek
+      - key: DEEPSEEK_MODEL
+        value: deepseek-chat
+      - key: DEEPSEEK_API_KEY
+        sync: false

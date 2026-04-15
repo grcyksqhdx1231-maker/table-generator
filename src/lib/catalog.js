@@ -10,6 +10,22 @@ export const SHAPES = [
   { value: "oval", label: "Oval" }
 ];
 
+export const SILHOUETTE_MODES = [
+  { value: "shape", label: "Shape Outline" },
+  { value: "sketch", label: "Sketch Outline" }
+];
+
+export const PATTERN_MODES = [
+  { value: "metal", label: "Metal Triangles" },
+  { value: "uploaded", label: "Uploaded Motif" }
+];
+
+export const LEG_SHAPES = [
+  { value: "round", label: "Round" },
+  { value: "square", label: "Square" },
+  { value: "blade", label: "Blade" }
+];
+
 export const MATERIALS = [
   { value: "light_wood", label: "Light Wood" },
   { value: "dark_walnut", label: "Dark Walnut" },
@@ -20,8 +36,25 @@ export const MATERIALS = [
 export const DEFAULT_CONFIG = {
   scenario: "daylight",
   shape: "rectangle",
-  size: 1.48,
-  material: "light_wood"
+  silhouetteMode: "shape",
+  width: 1.52,
+  depth: 0.84,
+  height: 0.76,
+  material: "light_wood",
+  patternMode: "metal",
+  moduleSize: 0.16,
+  moduleGap: 0.012,
+  moduleThicknessScale: 1,
+  patternPresence: 1.15,
+  patternContrast: 1.4,
+  patternBrightness: 1.18,
+  patternRelief: 0.58,
+  finishColor: "",
+  legShape: "round",
+  legLength: 0.68,
+  legWidth: 0.09,
+  legDepth: 0.09,
+  legCount: 4
 };
 
 export const SCENARIO_PRESETS = {
@@ -74,7 +107,6 @@ export const MATERIAL_PRESETS = {
     metalness: 0.04,
     clearcoat: 0.06,
     reflectivity: 0.3,
-    thickness: 0.078,
     legRadius: 0.046
   },
   dark_walnut: {
@@ -84,7 +116,6 @@ export const MATERIAL_PRESETS = {
     metalness: 0.03,
     clearcoat: 0.08,
     reflectivity: 0.28,
-    thickness: 0.082,
     legRadius: 0.048
   },
   rough_stone: {
@@ -94,7 +125,6 @@ export const MATERIAL_PRESETS = {
     metalness: 0.01,
     clearcoat: 0.03,
     reflectivity: 0.18,
-    thickness: 0.096,
     legRadius: 0.04
   },
   metal: {
@@ -104,35 +134,215 @@ export const MATERIAL_PRESETS = {
     metalness: 0.9,
     clearcoat: 0.22,
     reflectivity: 0.58,
-    thickness: 0.07,
     legRadius: 0.04
   }
 };
 
 const scenarioValues = new Set(SCENARIOS.map((item) => item.value));
 const shapeValues = new Set(SHAPES.map((item) => item.value));
+const silhouetteValues = new Set(SILHOUETTE_MODES.map((item) => item.value));
+const patternValues = new Set(PATTERN_MODES.map((item) => item.value));
+const legShapeValues = new Set(LEG_SHAPES.map((item) => item.value));
 const materialValues = new Set(MATERIALS.map((item) => item.value));
 
-export function clampSize(size) {
-  const numeric = Number(size);
+function normalizeHexColor(value) {
+  const text = String(value || "").trim();
+  return /^#[0-9a-f]{6}$/i.test(text) ? text.toLowerCase() : "";
+}
+
+export function clampDimension(value) {
+  const numeric = Number(value);
 
   if (Number.isNaN(numeric)) {
-    return DEFAULT_CONFIG.size;
+    return DEFAULT_CONFIG.width;
   }
 
-  return Math.max(0.75, Math.min(2.4, Number(numeric.toFixed(2))));
+  return Math.max(0.65, Math.min(2.4, Number(numeric.toFixed(2))));
+}
+
+export function clampHeight(value) {
+  const numeric = Number(value);
+
+  if (Number.isNaN(numeric)) {
+    return DEFAULT_CONFIG.height;
+  }
+
+  return Math.max(0.56, Math.min(1.12, Number(numeric.toFixed(2))));
+}
+
+export function clampLegLength(value) {
+  const numeric = Number(value);
+
+  if (Number.isNaN(numeric)) {
+    return DEFAULT_CONFIG.legLength;
+  }
+
+  return Math.max(0.42, Math.min(1.02, Number(numeric.toFixed(2))));
+}
+
+export function clampLegCount(value) {
+  const numeric = Number(value);
+
+  if (Number.isNaN(numeric)) {
+    return DEFAULT_CONFIG.legCount;
+  }
+
+  return Math.max(3, Math.min(8, Math.round(numeric)));
+}
+
+export function clampLegSpan(value, fallback = DEFAULT_CONFIG.legWidth) {
+  const numeric = Number(value);
+
+  if (Number.isNaN(numeric)) {
+    return fallback;
+  }
+
+  return Math.max(0.04, Math.min(0.28, Number(numeric.toFixed(3))));
+}
+
+export function clampModuleSize(value) {
+  const numeric = Number(value);
+
+  if (Number.isNaN(numeric)) {
+    return DEFAULT_CONFIG.moduleSize;
+  }
+
+  return Math.max(0.04, Math.min(0.28, Number(numeric.toFixed(3))));
+}
+
+export function clampModuleGap(value) {
+  const numeric = Number(value);
+
+  if (Number.isNaN(numeric)) {
+    return DEFAULT_CONFIG.moduleGap;
+  }
+
+  return Math.max(0, Math.min(0.04, Number(numeric.toFixed(3))));
+}
+
+export function clampModuleThicknessScale(value) {
+  const numeric = Number(value);
+
+  if (Number.isNaN(numeric)) {
+    return DEFAULT_CONFIG.moduleThicknessScale;
+  }
+
+  return Math.max(0.18, Math.min(1.2, Number(numeric.toFixed(2))));
+}
+
+export function clampPatternPresence(value) {
+  const numeric = Number(value);
+
+  if (Number.isNaN(numeric)) {
+    return DEFAULT_CONFIG.patternPresence;
+  }
+
+  return Math.max(0.35, Math.min(2.2, Number(numeric.toFixed(2))));
+}
+
+export function clampPatternContrast(value) {
+  const numeric = Number(value);
+
+  if (Number.isNaN(numeric)) {
+    return DEFAULT_CONFIG.patternContrast;
+  }
+
+  return Math.max(0.7, Math.min(2.8, Number(numeric.toFixed(2))));
+}
+
+export function clampPatternBrightness(value) {
+  const numeric = Number(value);
+
+  if (Number.isNaN(numeric)) {
+    return DEFAULT_CONFIG.patternBrightness;
+  }
+
+  return Math.max(0.65, Math.min(2.4, Number(numeric.toFixed(2))));
+}
+
+export function clampPatternRelief(value) {
+  const numeric = Number(value);
+
+  if (Number.isNaN(numeric)) {
+    return DEFAULT_CONFIG.patternRelief;
+  }
+
+  return Math.max(0, Math.min(1.25, Number(numeric.toFixed(2))));
 }
 
 export function normalizeConfig(config) {
+  const width = clampDimension(config?.width ?? DEFAULT_CONFIG.width);
+  const depth = clampDimension(config?.depth ?? DEFAULT_CONFIG.depth);
+  let height = clampHeight(config?.height ?? DEFAULT_CONFIG.height);
+  let legLength = clampLegLength(config?.legLength ?? DEFAULT_CONFIG.legLength);
+  const legWidth = clampLegSpan(
+    config?.legWidth ?? DEFAULT_CONFIG.legWidth,
+    DEFAULT_CONFIG.legWidth
+  );
+  const legDepth = clampLegSpan(
+    config?.legDepth ?? DEFAULT_CONFIG.legDepth,
+    DEFAULT_CONFIG.legDepth
+  );
+  const moduleSize = clampModuleSize(
+    config?.moduleSize ?? DEFAULT_CONFIG.moduleSize
+  );
+  const moduleGap = clampModuleGap(config?.moduleGap ?? DEFAULT_CONFIG.moduleGap);
+  const moduleThicknessScale = clampModuleThicknessScale(
+    config?.moduleThicknessScale ?? DEFAULT_CONFIG.moduleThicknessScale
+  );
+  const patternPresence = clampPatternPresence(
+    config?.patternPresence ?? DEFAULT_CONFIG.patternPresence
+  );
+  const patternContrast = clampPatternContrast(
+    config?.patternContrast ?? DEFAULT_CONFIG.patternContrast
+  );
+  const patternBrightness = clampPatternBrightness(
+    config?.patternBrightness ?? DEFAULT_CONFIG.patternBrightness
+  );
+  const patternRelief = clampPatternRelief(
+    config?.patternRelief ?? DEFAULT_CONFIG.patternRelief
+  );
+
+  if (legLength > height - 0.05) {
+    legLength = Math.max(0.42, Number((height - 0.05).toFixed(2)));
+  }
+
+  if (height < legLength + 0.05) {
+    height = clampHeight(legLength + 0.05);
+  }
+
   return {
     scenario: scenarioValues.has(config?.scenario)
       ? config.scenario
       : DEFAULT_CONFIG.scenario,
     shape: shapeValues.has(config?.shape) ? config.shape : DEFAULT_CONFIG.shape,
-    size: clampSize(config?.size ?? DEFAULT_CONFIG.size),
+    silhouetteMode: silhouetteValues.has(config?.silhouetteMode)
+      ? config.silhouetteMode
+      : DEFAULT_CONFIG.silhouetteMode,
+    width,
+    depth,
+    height,
     material: materialValues.has(config?.material)
       ? config.material
-      : DEFAULT_CONFIG.material
+      : DEFAULT_CONFIG.material,
+    patternMode: patternValues.has(config?.patternMode)
+      ? config.patternMode
+      : DEFAULT_CONFIG.patternMode,
+    moduleSize,
+    moduleGap,
+    moduleThicknessScale,
+    patternPresence,
+    patternContrast,
+    patternBrightness,
+    patternRelief,
+    finishColor: normalizeHexColor(config?.finishColor),
+    legShape: legShapeValues.has(config?.legShape)
+      ? config.legShape
+      : DEFAULT_CONFIG.legShape,
+    legLength,
+    legWidth,
+    legDepth,
+    legCount: clampLegCount(config?.legCount ?? DEFAULT_CONFIG.legCount)
   };
 }
 
@@ -141,47 +351,94 @@ export function getOptionLabel(collection, value) {
 }
 
 export function getDraftLabel(config) {
-  const shape = getOptionLabel(SHAPES, config.shape);
+  const shape =
+    config.silhouetteMode === "sketch"
+      ? "Sketch Mosaic"
+      : getOptionLabel(SHAPES, config.shape);
   const material = getOptionLabel(MATERIALS, config.material);
   return `${shape} / ${material}`;
 }
 
-export function getShapeProfile(config) {
-  const size = clampSize(config.size);
-  const material =
-    MATERIAL_PRESETS[config.material] ?? MATERIAL_PRESETS.light_wood;
+export function getShapeProfile(rawConfig) {
+  const config = normalizeConfig(rawConfig);
+  const diameter = (config.width + config.depth) / 2;
+  const width = config.shape === "round" ? diameter : config.width;
+  const depth = config.shape === "round" ? diameter : config.depth;
+  const thickness = Math.max(
+    0.05,
+    Math.min(0.16, Number((config.height - config.legLength).toFixed(3)))
+  );
 
   if (config.shape === "round") {
     return {
-      radiusX: size * 0.5,
-      radiusZ: size * 0.5,
+      ...config,
+      width,
+      depth,
+      radiusX: width / 2,
+      radiusZ: depth / 2,
       exponent: 2,
-      thickness: material.thickness,
-      legRadius: material.legRadius,
-      legSpreadX: size * 0.24,
-      legSpreadZ: size * 0.24
+      thickness,
+      topY: config.legLength + thickness / 2,
+      silhouetteMode: config.silhouetteMode,
+      patternMode: config.patternMode,
+      moduleSize: config.moduleSize,
+      moduleGap: config.moduleGap,
+      moduleThicknessScale: config.moduleThicknessScale,
+      patternPresence: config.patternPresence,
+      patternContrast: config.patternContrast,
+      patternBrightness: config.patternBrightness,
+      patternRelief: config.patternRelief,
+      finishColor: config.finishColor,
+      legWidth: config.legWidth,
+      legDepth: config.legDepth
     };
   }
 
   if (config.shape === "oval") {
     return {
-      radiusX: size * 0.54,
-      radiusZ: size * 0.33,
-      exponent: 2.25,
-      thickness: material.thickness,
-      legRadius: material.legRadius,
-      legSpreadX: size * 0.31,
-      legSpreadZ: size * 0.16
+      ...config,
+      width,
+      depth,
+      radiusX: width / 2,
+      radiusZ: depth / 2,
+      exponent: 2.4,
+      thickness,
+      topY: config.legLength + thickness / 2,
+      silhouetteMode: config.silhouetteMode,
+      patternMode: config.patternMode,
+      moduleSize: config.moduleSize,
+      moduleGap: config.moduleGap,
+      moduleThicknessScale: config.moduleThicknessScale,
+      patternPresence: config.patternPresence,
+      patternContrast: config.patternContrast,
+      patternBrightness: config.patternBrightness,
+      patternRelief: config.patternRelief,
+      finishColor: config.finishColor,
+      legWidth: config.legWidth,
+      legDepth: config.legDepth
     };
   }
 
   return {
-    radiusX: size * 0.51,
-    radiusZ: size * 0.31,
-    exponent: 7,
-    thickness: material.thickness,
-    legRadius: material.legRadius,
-    legSpreadX: size * 0.29,
-    legSpreadZ: size * 0.17
+    ...config,
+    width,
+    depth,
+    radiusX: width / 2,
+    radiusZ: depth / 2,
+    exponent: 7.2,
+    thickness,
+    topY: config.legLength + thickness / 2,
+    silhouetteMode: config.silhouetteMode,
+    patternMode: config.patternMode,
+    moduleSize: config.moduleSize,
+    moduleGap: config.moduleGap,
+    moduleThicknessScale: config.moduleThicknessScale,
+    patternPresence: config.patternPresence,
+    patternContrast: config.patternContrast,
+    patternBrightness: config.patternBrightness,
+    patternRelief: config.patternRelief,
+    finishColor: config.finishColor,
+    legWidth: config.legWidth,
+    legDepth: config.legDepth
   };
 }

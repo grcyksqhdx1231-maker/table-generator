@@ -2,16 +2,28 @@ services:
   - type: web
     runtime: node
     name: wabi-sabi-table-generator
+    region: singapore
     plan: free
-    autoDeploy: true
-    buildCommand: npm install && npm run build
+    autoDeployTrigger: commit
+    buildCommand: npm ci && npm run build
+    healthCheckPath: /api/health
     startCommand: npm run start
     envVars:
+      - key: PORT
+        value: 10000
       - key: NODE_ENV
         value: production
       - key: AI_PROVIDER
-        value: deepseek
-      - key: DEEPSEEK_MODEL
-        value: deepseek-chat
-      - key: DEEPSEEK_API_KEY
+        value: gemini
+      - key: GEMINI_TRANSPORT
+        value: native
+      - key: GEMINI_BASE_URL
+        value: https://api.viviai.cc/v1beta
+      - key: GEMINI_MODEL
+        value: gemini-2.5-flash
+      - key: GEMINI_IMAGE_MODEL
+        value: gemini-2.5-flash-image-preview
+      - key: QUOTE_SCENE_OUTPUT_DIR
+        value: public/generated-scenes
+      - key: GEMINI_API_KEY
         sync: false

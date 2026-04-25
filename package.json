@@ -8,6 +8,7 @@
     "dev:client": "vite",
     "dev:server": "node --env-file=.env server/index.js",
     "build": "vite build",
+    "poster:stefan": "node scripts/generate_stefan_hurlemann_poster.mjs",
     "preview": "vite preview",
     "start": "node server/index.js"
   },

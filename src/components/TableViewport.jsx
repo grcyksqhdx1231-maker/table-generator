@@ -1,4 +1,4 @@
-import { useEffect, useRef } from "react";
+import { forwardRef, useEffect, useImperativeHandle, useRef } from "react";
 import * as THREE from "three";
 import { gsap } from "gsap";
 import { OrbitControls } from "three/examples/jsm/controls/OrbitControls.js";
@@ -7,26 +7,65 @@ import {
   SCENARIO_PRESETS,
   getShapeProfile
 } from "../lib/catalog";
+import { DEFAULT_PART_MATERIALS, getEcoMaterial } from "../lib/ecoMaterials";
+import { getMaterialTexture } from "../lib/materialTextures";
 import {
   createColorDrift,
   generateTriangleCells,
   mapSketchHullToOutline
 } from "../lib/triangleModules";
+import {
+  TEACHER_FRAMEWORK_BASE,
+  createTeacherBoardGeometry,
+  createTeacherFrameGeometry,
+  createTeacherLegGeometry,
+  getTeacherFrameworkMetrics,
+  getTeacherLegAnchors
+} from "../lib/teacherFramework";
 
 const INTRO_CAMERA = { x: -1.9, y: 2.55, z: 7.6 };
 const DETAIL_DIRECTION = new THREE.Vector3(0.72, 0.48, 1).normalize();
 const TRIANGLE_RADIUS = 1 / Math.sqrt(3);
 
+function getLegPartId(index) {
+  return `leg-${index + 1}`;
+}
+
+function resolvePartOverride(partOverrides, partId, fallbackMaterialKey) {
+  return {
+    materialKey:
+      partOverrides?.[partId]?.materialKey ||
+      partOverrides?.[partId]?.ecoMaterial ||
+      fallbackMaterialKey,
+    tint: partOverrides?.[partId]?.tint || "",
+    widthScale: Number(partOverrides?.[partId]?.widthScale || 1),
+    depthScale: Number(partOverrides?.[partId]?.depthScale || 1),
+    lengthScale: Number(partOverrides?.[partId]?.lengthScale || 1),
+    moduleSizeScale: Number(partOverrides?.[partId]?.moduleSizeScale || 1),
+    thicknessScale: Number(partOverrides?.[partId]?.thicknessScale || 1)
+  };
+}
+
 function createTriangleModuleGeometry() {
-  const geometry = new THREE.CylinderGeometry(
-    TRIANGLE_RADIUS,
-    TRIANGLE_RADIUS,
-    1,
-    3,
-    1,
-    false
-  );
-  geometry.rotateY(Math.PI / 2);
+  const triangleHeight = Math.sqrt(3) / 2;
+  const shape = new THREE.Shape();
+  shape.moveTo(0, (triangleHeight * 2) / 3);
+  shape.lineTo(-0.5, -triangleHeight / 3);
+  shape.lineTo(0.5, -triangleHeight / 3);
+  shape.closePath();
+
+  const geometry = new THREE.ExtrudeGeometry(shape, {
+    depth: 1,
+    steps: 1,
+    bevelEnabled: true,
+    bevelThickness: 0.038,
+    bevelSize: 0.032,
+    bevelSegments: 3,
+    curveSegments: 16
+  });
+  geometry.rotateX(-Math.PI / 2);
+  geometry.translate(0, -0.5, 0);
+  geometry.computeVertexNormals();
   return geometry;
 }
 
@@ -68,6 +107,62 @@ function getLegFootprint(profile) {
     x: Math.max(0.02, profile.legWidth / 2),
     z: Math.max(0.02, profile.legDepth / 2)
   };
+}
+
+function getOutlineCentroid(outlinePoints) {
+  if (!outlinePoints.length) {
+    return {
+      x: 0,
+      z: 0
+    };
+  }
+
+  return outlinePoints.reduce(
+    (accumulator, point) => ({
+      x: accumulator.x + point.x / outlinePoints.length,
+      z: accumulator.z + point.z / outlinePoints.length
+    }),
+    { x: 0, z: 0 }
+  );
+}
+
+function getSupportPointForDirection(outlinePoints, direction) {
+  return outlinePoints.reduce((bestPoint, point) => {
+    const pointScore = point.x * direction.x + point.z * direction.z;
+    const bestScore = bestPoint.x * direction.x + bestPoint.z * direction.z;
+    return pointScore > bestScore ? point : bestPoint;
+  }, outlinePoints[0]);
+}
+
+function getSketchLegAnchors(metrics, profile, outlinePoints) {
+  if (!Array.isArray(outlinePoints) || outlinePoints.length < 3) {
+    return [];
+  }
+
+  const centroid = getOutlineCentroid(outlinePoints);
+  const inset = Math.max(profile.moduleSize * 0.68, profile.legWidth * 2.1, 0.045);
+  const legTopY = metrics.height - Math.max(0.006, metrics.boardThickness * 0.2);
+  const count = Math.max(3, Math.min(profile.legCount, 8));
+  const startAngle = profile.legCount === 4 ? Math.PI / 4 : -Math.PI / 2;
+
+  return Array.from({ length: count }, (_, index) => {
+    const angle = startAngle + (index / count) * Math.PI * 2;
+    const direction = {
+      x: Math.sin(angle),
+      z: Math.cos(angle)
+    };
+    const supportPoint = getSupportPointForDirection(outlinePoints, direction);
+    const position = new THREE.Vector3(
+      supportPoint.x - direction.x * inset,
+      legTopY,
+      supportPoint.z - direction.z * inset
+    );
+
+    return {
+      position,
+      rotationY: Math.atan2(position.x - centroid.x, position.z - centroid.z)
+    };
+  });
 }
 
 function getSuperellipsePoint(radiusX, radiusZ, exponent, angle) {
@@ -147,16 +242,101 @@ function blendHex(baseHex, tintHex, amount) {
   return `#${base.lerp(tint, amount).getHexString()}`;
 }
 
-function applyModuleMaterial(material, values, patternMode) {
+function tintColor(baseColor, tintHex) {
+  if (!tintHex) {
+    return baseColor.clone();
+  }
+
+  return baseColor.clone().lerp(new THREE.Color(tintHex), 0.78);
+}
+
+function applyEcoFinish(material, materialKey, tintHex = "", highlighted = false) {
+  const descriptor = getEcoMaterial(materialKey);
+  const texture = tintHex ? null : getMaterialTexture(materialKey);
+  const baseColor = tintColor(new THREE.Color(descriptor.baseColor), tintHex);
+
+  material.color.copy(baseColor);
+  material.map = texture;
+  material.roughness = tintHex
+    ? Math.max(0.26, descriptor.roughness * 0.86)
+    : descriptor.roughness;
+  material.metalness = descriptor.metalness;
+  material.clearcoat = tintHex
+    ? Math.max(0.1, descriptor.clearcoat + 0.08)
+    : descriptor.clearcoat;
+  material.reflectivity = tintHex
+    ? Math.max(0.2, descriptor.reflectivity * 0.82)
+    : descriptor.reflectivity;
+  material.envMapIntensity = tintHex ? 0.96 : 1.08;
+  material.transmission = descriptor.transmission || 0;
+  material.transparent = Boolean(descriptor.transmission || descriptor.opacity < 1);
+  material.opacity = descriptor.opacity ?? 1;
+  material.emissive = material.emissive || new THREE.Color("#000000");
+  material.emissive.set(highlighted ? "#d9381e" : "#000000");
+  material.emissiveIntensity = highlighted ? 0.12 : 0;
+  material.needsUpdate = true;
+}
+
+function buildSeamGeometry(cells, seamY) {
+  const edgeMap = new Map();
+
+  cells.forEach((cell) => {
+    if (!cell.vertices || cell.vertices.length !== 3) {
+      return;
+    }
+
+    const edges = [
+      [cell.vertices[0], cell.vertices[1]],
+      [cell.vertices[1], cell.vertices[2]],
+      [cell.vertices[2], cell.vertices[0]]
+    ];
+
+    edges.forEach(([a, b]) => {
+      const keyA = `${a.x.toFixed(4)},${a.z.toFixed(4)}`;
+      const keyB = `${b.x.toFixed(4)},${b.z.toFixed(4)}`;
+      const key = keyA < keyB ? `${keyA}|${keyB}` : `${keyB}|${keyA}`;
+
+      if (!edgeMap.has(key)) {
+        edgeMap.set(key, [a, b]);
+      }
+    });
+  });
+
+  const positions = [];
+  edgeMap.forEach(([a, b]) => {
+    positions.push(a.x, seamY, a.z, b.x, seamY, b.z);
+  });
+
+  const geometry = new THREE.BufferGeometry();
+  geometry.setAttribute("position", new THREE.Float32BufferAttribute(positions, 3));
+  return geometry;
+}
+
+function applyModuleMaterial(material, values, patternMode, highlighted = false) {
   material.color.set("#ffffff");
+  material.map = null;
   material.roughness =
-    patternMode === "metal" ? Math.max(0.18, values.roughness * 0.36) : values.roughness;
+    patternMode === "metal"
+      ? Math.max(0.22, values.roughness * 0.78)
+      : Math.max(0.28, values.roughness * 0.92);
   material.metalness =
-    patternMode === "metal" ? Math.max(0.78, values.metalness) : values.metalness * 0.4;
+    patternMode === "metal"
+      ? Math.max(0.18, values.metalness * 0.52)
+      : Math.max(0.02, values.metalness * 0.18);
   material.clearcoat =
-    patternMode === "metal" ? Math.max(0.14, values.clearcoat) : values.clearcoat;
+    patternMode === "metal"
+      ? Math.max(0.16, values.clearcoat + 0.12)
+      : Math.max(0.08, values.clearcoat + 0.06);
   material.reflectivity =
-    patternMode === "metal" ? Math.max(0.42, values.reflectivity) : values.reflectivity;
+    patternMode === "metal"
+      ? Math.max(0.26, values.reflectivity * 0.82)
+      : Math.max(0.16, values.reflectivity * 0.72);
+  material.transmission = 0;
+  material.transparent = false;
+  material.opacity = 1;
+  material.emissive = material.emissive || new THREE.Color("#000000");
+  material.emissive.set(highlighted ? "#d9381e" : "#000000");
+  material.emissiveIntensity = highlighted ? 0.08 : 0;
   material.needsUpdate = true;
 }
 
@@ -287,7 +467,15 @@ function applyBrightness(color, brightness) {
   return color;
 }
 
-function getPatternBaseColor(profile) {
+function getPatternBaseColor(profile, partStyle = null) {
+  if (partStyle?.tint) {
+    return new THREE.Color(partStyle.tint);
+  }
+
+  if (partStyle?.materialKey) {
+    return new THREE.Color(getEcoMaterial(partStyle.materialKey).baseColor);
+  }
+
   if (profile.material === "metal") {
     return new THREE.Color("#aeb4b9");
   }
@@ -298,9 +486,9 @@ function getPatternBaseColor(profile) {
   return new THREE.Color(materialColor);
 }
 
-function getModuleColor(profile, cell, patternInfo) {
+function getModuleColor(profile, cell, patternInfo, partStyle = null) {
   if (profile.patternMode === "uploaded" && patternInfo) {
-    const baseColor = getPatternBaseColor(profile);
+    const baseColor = getPatternBaseColor(profile, partStyle);
     const color = sampleImageColor(patternInfo, cell.u, cell.v, baseColor);
 
     if (profile.material === "metal") {
@@ -326,7 +514,11 @@ function getModuleColor(profile, cell, patternInfo) {
       )
     );
 
-    return color;
+    return partStyle?.tint ? tintColor(color, partStyle.tint) : color;
+  }
+
+  if (partStyle?.materialKey) {
+    return getPatternBaseColor(profile, partStyle);
   }
 
   const baseHex =
@@ -334,21 +526,101 @@ function getModuleColor(profile, cell, patternInfo) {
       ? "#a7adb2"
       : blendHex(MATERIAL_PRESETS[profile.material].topColor, "#c3c7cb", 0.58);
 
-  const color = new THREE.Color(profile.finishColor || baseHex);
-  const drift = createColorDrift(cell.x * 3.2, cell.z * 2.1);
-  color.offsetHSL((drift - 0.5) * 0.028, 0, (drift - 0.5) * 0.11);
-  return color;
+  return new THREE.Color(profile.finishColor || baseHex);
 }
 
-export default function TableViewport({
+function buildGhPreviewGeometry(previewMesh) {
+  if (
+    !previewMesh ||
+    !Array.isArray(previewMesh.vertices) ||
+    !Array.isArray(previewMesh.faces)
+  ) {
+    return null;
+  }
+
+  const scale = previewMesh.unit === "mm" ? 0.001 : 1;
+  const positions = [];
+
+  previewMesh.vertices.forEach((vertex) => {
+    if (!Array.isArray(vertex) || vertex.length < 3) {
+      return;
+    }
+
+    positions.push(
+      Number(vertex[0]) * scale,
+      Number(vertex[1]) * scale,
+      Number(vertex[2]) * scale
+    );
+  });
+
+  const indices = [];
+  previewMesh.faces.forEach((face) => {
+    if (!Array.isArray(face) || face.length < 3) {
+      return;
+    }
+
+    indices.push(Number(face[0]), Number(face[1]), Number(face[2]));
+  });
+
+  if (!positions.length || !indices.length) {
+    return null;
+  }
+
+  const geometry = new THREE.BufferGeometry();
+  geometry.setAttribute("position", new THREE.Float32BufferAttribute(positions, 3));
+  geometry.setIndex(indices);
+  geometry.computeVertexNormals();
+  geometry.computeBoundingSphere();
+
+  return geometry;
+}
+
+const TableViewport = forwardRef(function TableViewport({
   config,
   phase,
+  ghPreviewMesh = null,
   patternAsset,
   sketchMaskDataUrl,
-  sketchOutline
-}) {
+  sketchOutline,
+  interactive = true,
+  transparentScene = false,
+  variantLabel = "",
+  selectedPartId = "",
+  onSelectPart = null,
+  partOverrides = {}
+}, ref) {
+  const ghPreviewActive = Boolean(ghPreviewMesh);
   const containerRef = useRef(null);
   const sceneRef = useRef(null);
+
+  useImperativeHandle(
+    ref,
+    () => ({
+      captureImage(mimeType = "image/png", quality) {
+        const state = sceneRef.current;
+
+        if (!state?.renderer || !state?.scene || !state?.camera) {
+          return "";
+        }
+
+        state.renderer.render(state.scene, state.camera);
+        if (mimeType === "image/jpeg") {
+          const sourceCanvas = state.renderer.domElement;
+          const exportCanvas = document.createElement("canvas");
+          const context = exportCanvas.getContext("2d");
+          exportCanvas.width = sourceCanvas.width;
+          exportCanvas.height = sourceCanvas.height;
+          context.fillStyle = "#f4f1eb";
+          context.fillRect(0, 0, exportCanvas.width, exportCanvas.height);
+          context.drawImage(sourceCanvas, 0, 0);
+          return exportCanvas.toDataURL(mimeType, quality);
+        }
+
+        return state.renderer.domElement.toDataURL(mimeType, quality);
+      }
+    }),
+    []
+  );
 
   useEffect(() => {
     const container = containerRef.current;
@@ -358,7 +630,8 @@ export default function TableViewport({
 
     const renderer = new THREE.WebGLRenderer({
       antialias: true,
-      alpha: true
+      alpha: true,
+      preserveDrawingBuffer: true
     });
     renderer.outputColorSpace = THREE.SRGBColorSpace;
     renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
@@ -388,9 +661,9 @@ export default function TableViewport({
 
     const envTexture = createEnvironmentTexture(renderer);
     scene.environment = envTexture;
-    scene.environmentIntensity = 1.05;
-    scene.background = new THREE.Color("#f4f1eb");
-    scene.fog = new THREE.Fog("#f4f1eb", 6, 16);
+    scene.environmentIntensity = 1.2;
+    scene.background = transparentScene ? null : new THREE.Color("#f4f1eb");
+    scene.fog = transparentScene ? null : new THREE.Fog("#f4f1eb", 6, 16);
 
     const root = new THREE.Group();
     scene.add(root);
@@ -398,13 +671,50 @@ export default function TableViewport({
     const tableGroup = new THREE.Group();
     root.add(tableGroup);
 
+    const ghPreviewGroup = new THREE.Group();
+    root.add(ghPreviewGroup);
+
+    const ghPreviewState = {
+      mesh: null,
+      edges: null,
+      material: new THREE.MeshPhysicalMaterial({
+        color: "#00e5ff",
+        emissive: "#00e5ff",
+        emissiveIntensity: 0.34,
+        roughness: 0.2,
+        metalness: 0.05,
+        clearcoat: 0.1,
+        transparent: true,
+        opacity: 0.46,
+        side: THREE.DoubleSide,
+        depthTest: false,
+        depthWrite: false,
+        wireframe: false
+      }),
+      edgeMaterial: new THREE.LineBasicMaterial({
+        color: "#00e5ff",
+        transparent: false,
+        opacity: 1,
+        depthTest: false
+      })
+    };
+
     const moduleMaterial = new THREE.MeshPhysicalMaterial({
-      vertexColors: true
+      vertexColors: true,
+      side: THREE.DoubleSide,
+      roughness: 0.42,
+      metalness: 0.08,
+      clearcoat: 0.14
     });
-    const legMaterial = new THREE.MeshPhysicalMaterial();
     const moduleState = {
       geometry: createTriangleModuleGeometry(),
       mesh: null,
+      seamLines: null,
+      seamMaterial: new THREE.LineBasicMaterial({
+        color: "#8f7358",
+        transparent: true,
+        opacity: 0.55
+      }),
       patternInfo: null,
       maskInfo: null,
       sketchOutline: [],
@@ -419,6 +729,14 @@ export default function TableViewport({
       shape: "",
       count: 0
     };
+    const frameworkGroup = new THREE.Group();
+    tableGroup.add(frameworkGroup);
+    const teacherState = {
+      board: null,
+      frame: null,
+      boardGeometry: null,
+      frameGeometry: null
+    };
 
     const ground = new THREE.Mesh(
       new THREE.PlaneGeometry(20, 20),
@@ -430,6 +748,9 @@ export default function TableViewport({
 
     const hemisphere = new THREE.HemisphereLight("#fff8ee", "#7d7168", 1.1);
     scene.add(hemisphere);
+
+    const ambient = new THREE.AmbientLight("#fff4e7", 0.42);
+    scene.add(ambient);
 
     const keyLight = new THREE.DirectionalLight("#fff5de", 2.4);
     keyLight.position.set(4.2, 5.2, 3.4);
@@ -454,47 +775,92 @@ export default function TableViewport({
     const lookAtTarget = { x: 0, y: 0.56, z: 0 };
     const shapeState = { ...getShapeProfile(config) };
 
+    function ensureTeacherMeshes() {
+      if (!teacherState.boardGeometry) {
+        teacherState.boardGeometry = createTeacherBoardGeometry();
+      }
+
+      if (!teacherState.frameGeometry) {
+        teacherState.frameGeometry = createTeacherFrameGeometry();
+      }
+
+      if (!teacherState.board) {
+        teacherState.board = new THREE.Mesh(
+          teacherState.boardGeometry,
+          new THREE.MeshPhysicalMaterial()
+        );
+        teacherState.board.castShadow = true;
+        teacherState.board.receiveShadow = true;
+        teacherState.board.userData.partId = "tabletop";
+        frameworkGroup.add(teacherState.board);
+      }
+
+      if (!teacherState.frame) {
+        teacherState.frame = new THREE.Mesh(
+          teacherState.frameGeometry,
+          new THREE.MeshPhysicalMaterial()
+        );
+        teacherState.frame.castShadow = true;
+        teacherState.frame.receiveShadow = true;
+        teacherState.frame.userData.partId = "tabletop";
+        frameworkGroup.add(teacherState.frame);
+      }
+    }
+
     function rebuildLegMeshes(profile) {
       if (legState.geometry) {
         legState.geometry.dispose();
       }
 
       legState.meshes.forEach((mesh) => {
+        mesh.material.dispose();
         legGroup.remove(mesh);
       });
 
-      legState.geometry = createLegGeometry(profile.legShape);
-      legState.meshes = Array.from({ length: profile.legCount }, () => {
-        const leg = new THREE.Mesh(legState.geometry, legMaterial);
+      legState.geometry = createTeacherLegGeometry();
+      legState.meshes = Array.from({ length: profile.legCount }, (_, index) => {
+        const leg = new THREE.Mesh(legState.geometry, new THREE.MeshPhysicalMaterial());
         leg.castShadow = true;
         leg.receiveShadow = true;
+        leg.userData.partId = getLegPartId(index);
         legGroup.add(leg);
         return leg;
       });
-      legState.shape = profile.legShape;
+      legState.shape = "teacher-framework";
       legState.count = profile.legCount;
     }
 
     function ensureLegMeshes(profile) {
-      if (
-        !legState.geometry ||
-        legState.shape !== profile.legShape ||
-        legState.count !== profile.legCount
-      ) {
+      if (!legState.geometry || legState.shape !== "teacher-framework" || legState.count !== profile.legCount) {
         rebuildLegMeshes(profile);
       }
     }
 
     function rebuildModuleMesh(profile) {
+      const metrics = getTeacherFrameworkMetrics(profile);
+      const tabletopStyle = resolvePartOverride(
+        sceneRef.current?.partOverrides,
+        "tabletop",
+        DEFAULT_PART_MATERIALS.tabletop
+      );
       const outlinePoints =
         profile.silhouetteMode === "sketch"
           ? mapSketchHullToOutline(profile, moduleState.sketchOutline)
           : [];
-      const useSketchMask =
-        profile.silhouetteMode === "sketch" && Boolean(moduleState.maskInfo);
-      const cells = generateTriangleCells(profile, {
-        outlinePoints,
-        useSketchMask,
+      const useSketchSilhouette =
+        profile.silhouetteMode === "sketch" && outlinePoints.length >= 3;
+      const applyLocalMaskEdit =
+        profile.silhouetteMode !== "sketch" && Boolean(moduleState.maskInfo);
+      const effectiveProfile = {
+        ...profile,
+        moduleSize: profile.moduleSize * tabletopStyle.moduleSizeScale,
+        moduleThicknessScale:
+          profile.moduleThicknessScale * tabletopStyle.thicknessScale
+      };
+      const cells = generateTriangleCells(effectiveProfile, {
+        outlinePoints: useSketchSilhouette ? outlinePoints : [],
+        useSketchMask: false,
+        localMaskMode: applyLocalMaskEdit,
         maskSampler: moduleState.maskInfo
           ? (u, v) => sampleImageIntensity(moduleState.maskInfo, u, v)
           : null
@@ -502,6 +868,11 @@ export default function TableViewport({
 
       if (moduleState.mesh) {
         tableGroup.remove(moduleState.mesh);
+      }
+      if (moduleState.seamLines) {
+        tableGroup.remove(moduleState.seamLines);
+        moduleState.seamLines.geometry.dispose();
+        moduleState.seamLines = null;
       }
 
       const mesh = new THREE.InstancedMesh(
@@ -511,18 +882,32 @@ export default function TableViewport({
       );
       mesh.castShadow = true;
       mesh.receiveShadow = true;
-      const tileEdge = Math.max(0.026, profile.moduleSize - profile.moduleGap);
-      const baseModuleThickness = Math.max(
-        0.012,
-        profile.thickness * profile.moduleThicknessScale
+      mesh.userData.partId = "tabletop";
+      const tileEdge = Math.max(
+        0.02,
+        effectiveProfile.moduleSize * 1.08 - profile.moduleGap * 0.02
       );
-      const topLift = baseModuleThickness * 0.045;
+      const baseModuleThickness = Math.max(
+        0.006,
+        Math.min(
+          metrics.boardThickness * 0.48,
+          profile.thickness * effectiveProfile.moduleThicknessScale * 0.26
+        )
+      );
       const reliefStrength =
         profile.patternMode === "uploaded" ? Math.max(0, profile.patternRelief) : 0;
+      const topLift =
+        profile.patternMode === "uploaded"
+          ? baseModuleThickness * (0.03 + reliefStrength * 0.06)
+          : 0;
+      const moduleBaseY = metrics.height - baseModuleThickness * 0.86;
 
       cells.forEach((cell, index) => {
-        const drift = createColorDrift(cell.x * 1.4, cell.z * 0.9);
-        const patternBaseColor = getPatternBaseColor(profile);
+        const drift =
+          profile.patternMode === "uploaded"
+            ? createColorDrift(cell.x * 1.4, cell.z * 0.9)
+            : 0.5;
+        const patternBaseColor = getPatternBaseColor(profile, tabletopStyle);
         const patternStrength =
           profile.patternMode === "uploaded" && moduleState.patternInfo
             ? sampleImageIntensity(
@@ -533,22 +918,22 @@ export default function TableViewport({
               )
             : 0.5;
         const lift =
-          (drift - 0.5) * topLift +
-          (patternStrength - 0.5) *
-            (profile.patternMode === "uploaded"
-              ? baseModuleThickness * (0.14 + reliefStrength * 0.56)
-              : 0);
+          profile.patternMode === "uploaded"
+            ? (drift - 0.5) * topLift +
+              (patternStrength - 0.5) *
+                (baseModuleThickness * (0.05 + reliefStrength * 0.16))
+            : 0;
         const thicknessFactor =
           profile.patternMode === "uploaded"
-            ? 0.88 + (patternStrength - 0.5) * (0.18 + reliefStrength * 0.5)
+            ? 0.96 + (patternStrength - 0.5) * (0.06 + reliefStrength * 0.12)
             : 1;
         const moduleThickness = Math.max(
-          0.01,
-          baseModuleThickness * Math.max(0.46, thicknessFactor)
+          0.006,
+          baseModuleThickness * Math.max(0.84, thicknessFactor)
         );
         moduleState.dummy.position.set(
           cell.x,
-          profile.legLength + moduleThickness / 2 + lift,
+          moduleBaseY + moduleThickness / 2 + lift,
           cell.z
         );
         moduleState.dummy.rotation.set(0, cell.rotation, 0);
@@ -559,7 +944,10 @@ export default function TableViewport({
         );
         moduleState.dummy.updateMatrix();
         mesh.setMatrixAt(index, moduleState.dummy.matrix);
-        mesh.setColorAt(index, getModuleColor(profile, cell, moduleState.patternInfo));
+        mesh.setColorAt(
+          index,
+          getModuleColor(profile, cell, moduleState.patternInfo, tabletopStyle)
+        );
       });
 
       mesh.count = cells.length;
@@ -568,45 +956,174 @@ export default function TableViewport({
         mesh.instanceColor.needsUpdate = true;
       }
 
+      applyModuleMaterial(
+        moduleMaterial,
+        getEcoMaterial(tabletopStyle.materialKey),
+        profile.patternMode,
+        (sceneRef.current?.selectedPartId || "") === "tabletop"
+      );
       tableGroup.add(mesh);
       moduleState.mesh = mesh;
     }
 
     function updateTable(profile) {
+      const metrics = getTeacherFrameworkMetrics(profile);
+      const tabletopStyle = resolvePartOverride(
+        sceneRef.current?.partOverrides,
+        "tabletop",
+        DEFAULT_PART_MATERIALS.tabletop
+      );
+      const sketchOutlinePoints =
+        profile.silhouetteMode === "sketch"
+          ? mapSketchHullToOutline(profile, moduleState.sketchOutline)
+          : [];
+      const sketchSilhouetteActive = sketchOutlinePoints.length >= 3;
+
+      ensureTeacherMeshes();
       ensureLegMeshes(profile);
       rebuildModuleMesh(profile);
 
-      const anchors = getLegAnchors(profile);
-      const legScale = getLegScale(profile);
+      teacherState.board.scale.set(
+        (metrics.width / TEACHER_FRAMEWORK_BASE.width) *
+          THREE.MathUtils.clamp(tabletopStyle.widthScale, 0.55, 1.8),
+        metrics.boardThickness / TEACHER_FRAMEWORK_BASE.boardThickness,
+        (metrics.depth / TEACHER_FRAMEWORK_BASE.depth) *
+          THREE.MathUtils.clamp(tabletopStyle.depthScale, 0.55, 1.8)
+      );
+      teacherState.board.position.set(0, metrics.height - metrics.boardThickness / 2, 0);
+      teacherState.board.visible = !sketchSilhouetteActive;
+      teacherState.frame.scale.set(
+        (metrics.frameOuterWidth / TEACHER_FRAMEWORK_BASE.frameOuterWidth) *
+          THREE.MathUtils.clamp(tabletopStyle.widthScale, 0.55, 1.8),
+        metrics.frameDrop / TEACHER_FRAMEWORK_BASE.frameDrop,
+        (metrics.frameOuterDepth / TEACHER_FRAMEWORK_BASE.frameOuterDepth) *
+          THREE.MathUtils.clamp(tabletopStyle.depthScale, 0.55, 1.8)
+      );
+      teacherState.frame.position.set(
+        0,
+        metrics.height - metrics.boardThickness - metrics.frameDrop / 2,
+        0
+      );
+      teacherState.frame.visible = !sketchSilhouetteActive;
+      applyEcoFinish(
+        teacherState.board.material,
+        tabletopStyle.materialKey,
+        tabletopStyle.tint,
+        (sceneRef.current?.selectedPartId || "") === "tabletop"
+      );
+      applyEcoFinish(
+        teacherState.frame.material,
+        tabletopStyle.materialKey,
+        tabletopStyle.tint,
+        (sceneRef.current?.selectedPartId || "") === "tabletop"
+      );
+
+      const anchors = sketchSilhouetteActive
+        ? getSketchLegAnchors(metrics, profile, sketchOutlinePoints)
+        : getTeacherLegAnchors(metrics, profile.legCount);
 
       legState.meshes.forEach((leg, index) => {
+        const partId = getLegPartId(index);
+        const legStyle = resolvePartOverride(
+          sceneRef.current?.partOverrides,
+          partId,
+          DEFAULT_PART_MATERIALS.legs
+        );
         const anchor = anchors[index];
-        leg.position.set(anchor.x, anchor.y, anchor.z);
-        leg.rotation.y = anchor.rotationY;
-        leg.scale.set(legScale.x, profile.legLength, legScale.z);
+        if (!anchor) {
+          leg.visible = false;
+          return;
+        }
+        leg.visible = true;
+        const widthScale = THREE.MathUtils.clamp(legStyle.widthScale, 0.45, 1.9);
+        const depthScale = THREE.MathUtils.clamp(legStyle.depthScale, 0.45, 1.9);
+        const lengthScale = THREE.MathUtils.clamp(legStyle.lengthScale, 0.45, 1.7);
+        leg.position.copy(anchor.position);
+        leg.rotation.set(0, anchor.rotationY, 0);
+        leg.scale.set(
+          (metrics.legWidth / TEACHER_FRAMEWORK_BASE.legWidth) * widthScale,
+          (anchor.position.y / TEACHER_FRAMEWORK_BASE.legTopY) * lengthScale,
+          (metrics.legUpperDepth / TEACHER_FRAMEWORK_BASE.legUpperDepth) * depthScale
+        );
+        applyEcoFinish(
+          leg.material,
+          legStyle.materialKey,
+          legStyle.tint,
+          (sceneRef.current?.selectedPartId || "") === partId
+        );
       });
     }
 
-    function applyScenario(scenarioKey) {
+    function clearGhPreviewMesh() {
+      if (ghPreviewState.mesh) {
+        ghPreviewGroup.remove(ghPreviewState.mesh);
+        ghPreviewState.mesh.geometry.dispose();
+        ghPreviewState.mesh = null;
+      }
+
+      if (ghPreviewState.edges) {
+        ghPreviewGroup.remove(ghPreviewState.edges);
+        ghPreviewState.edges.geometry.dispose();
+        ghPreviewState.edges = null;
+      }
+    }
+
+    function applyGhPreviewMesh(previewMesh) {
+      clearGhPreviewMesh();
+
+      const geometry = buildGhPreviewGeometry(previewMesh);
+
+      if (!geometry) {
+        tableGroup.visible = true;
+        return;
+      }
+
+      tableGroup.visible = false;
+
+      const mesh = new THREE.Mesh(geometry, ghPreviewState.material);
+      mesh.castShadow = true;
+      mesh.receiveShadow = true;
+      mesh.userData.partId = "gh-preview";
+      mesh.renderOrder = 40;
+      mesh.position.y = 0.06;
+
+      ghPreviewGroup.add(mesh);
+      ghPreviewState.mesh = mesh;
+      ghPreviewState.edges = null;
+    }
+
+    function applyScenario(scenarioKey, lightAngle = 38) {
       const preset = SCENARIO_PRESETS[scenarioKey] ?? SCENARIO_PRESETS.daylight;
       const background = new THREE.Color(preset.background);
       const fog = new THREE.Color(preset.fog);
       const key = new THREE.Color(preset.keyColor);
       const fill = new THREE.Color(preset.fillColor);
       const rim = new THREE.Color(preset.rimColor);
+      const angle = THREE.MathUtils.degToRad(Number(lightAngle) || 0);
+      const keyX = Math.cos(angle) * 4.2;
+      const keyZ = Math.sin(angle) * 3.8;
+      const fillX = -Math.cos(angle) * 3.8;
+      const fillZ = -Math.sin(angle) * 3.6;
+      const rimX = Math.cos(angle + Math.PI * 0.72) * 3.2;
+      const rimZ = Math.sin(angle + Math.PI * 0.72) * 4.6;
 
-      gsap.to(scene.background, {
-        duration: 1.3,
-        r: background.r,
-        g: background.g,
-        b: background.b
-      });
-      gsap.to(scene.fog.color, {
-        duration: 1.3,
-        r: fog.r,
-        g: fog.g,
-        b: fog.b
-      });
+      if (transparentScene) {
+        scene.background = null;
+        scene.fog = null;
+      } else {
+        gsap.to(scene.background, {
+          duration: 1.3,
+          r: background.r,
+          g: background.g,
+          b: background.b
+        });
+        gsap.to(scene.fog.color, {
+          duration: 1.3,
+          r: fog.r,
+          g: fog.g,
+          b: fog.b
+        });
+      }
       gsap.to(keyLight.color, {
         duration: 1.3,
         r: key.r,
@@ -629,13 +1146,35 @@ export default function TableViewport({
         duration: 1.3,
         intensity: preset.keyIntensity
       });
+      gsap.to(keyLight.position, {
+        duration: 1.3,
+        x: keyX,
+        y: 5.2,
+        z: keyZ
+      });
       gsap.to(fillLight, {
         duration: 1.3,
         intensity: preset.fillIntensity
       });
+      gsap.to(fillLight.position, {
+        duration: 1.3,
+        x: fillX,
+        y: 2.5,
+        z: fillZ
+      });
+      gsap.to(rimLight.position, {
+        duration: 1.3,
+        x: rimX,
+        y: 3.2,
+        z: rimZ
+      });
       gsap.to(hemisphere, {
         duration: 1.3,
         intensity: preset.hemiIntensity
+      });
+      gsap.to(ambient, {
+        duration: 1.3,
+        intensity: Math.max(0.3, preset.hemiIntensity * 0.36)
       });
       gsap.to(ground.material, {
         duration: 1.3,
@@ -644,17 +1183,7 @@ export default function TableViewport({
     }
 
     updateTable(shapeState);
-    applyModuleMaterial(
-      moduleMaterial,
-      MATERIAL_PRESETS[shapeState.material] ?? MATERIAL_PRESETS.light_wood,
-      shapeState.patternMode
-    );
-    applyLegMaterial(
-      legMaterial,
-      MATERIAL_PRESETS[shapeState.material] ?? MATERIAL_PRESETS.light_wood,
-      shapeState.finishColor
-    );
-    applyScenario(shapeState.scenario);
+    applyScenario(shapeState.scenario, shapeState.lightAngle);
 
     let frameId = 0;
 
@@ -686,32 +1215,109 @@ export default function TableViewport({
       }
     }
 
+    function handlePointerDown(event) {
+      if (!interactive || !onSelectPart) {
+        return;
+      }
+
+      if (ghPreviewState.mesh) {
+        onSelectPart(null);
+        return;
+      }
+
+      const rect = renderer.domElement.getBoundingClientRect();
+      const pointer = new THREE.Vector2(
+        ((event.clientX - rect.left) / rect.width) * 2 - 1,
+        -((event.clientY - rect.top) / rect.height) * 2 + 1
+      );
+      const raycaster = new THREE.Raycaster();
+      raycaster.setFromCamera(pointer, camera);
+      const intersects = raycaster.intersectObjects(
+        [moduleState.mesh, ...legState.meshes].filter(Boolean)
+      );
+
+      if (!intersects.length) {
+        onSelectPart(null);
+        return;
+      }
+
+      const partId = intersects[0].object.userData.partId || "tabletop";
+      const partStyle = resolvePartOverride(
+        sceneRef.current?.partOverrides,
+        partId,
+        partId === "tabletop"
+          ? DEFAULT_PART_MATERIALS.tabletop
+          : DEFAULT_PART_MATERIALS.legs
+      );
+      const materialLabel = getEcoMaterial(partStyle.materialKey).label;
+      const legNumber = Number(String(partId).split("-")[1] || 0);
+
+      onSelectPart({
+        id: partId,
+        kind: partId === "tabletop" ? "tabletop" : "leg",
+        label:
+          partId === "tabletop"
+            ? `${materialLabel} Tabletop`
+            : `${materialLabel} Leg ${legNumber}`,
+        anchor: {
+          x: event.clientX - rect.left,
+          y: event.clientY - rect.top
+        }
+      });
+    }
+
     window.addEventListener("resize", handleResize);
+    renderer.domElement.addEventListener("pointerdown", handlePointerDown);
     render();
 
     sceneRef.current = {
       camera,
       controls,
+      renderer,
+      scene,
       lookAtTarget,
       moduleMaterial,
-      legMaterial,
       shapeState,
       applyScenario,
       updateTable,
+      applyGhPreviewMesh,
       phase,
-      moduleState
+      moduleState,
+      partOverrides,
+      selectedPartId
     };
+    applyGhPreviewMesh(ghPreviewMesh);
 
     return () => {
       window.cancelAnimationFrame(frameId);
       window.removeEventListener("resize", handleResize);
+      renderer.domElement.removeEventListener("pointerdown", handlePointerDown);
       controls.dispose();
       if (legState.geometry) {
         legState.geometry.dispose();
       }
+      legState.meshes.forEach((mesh) => mesh.material.dispose());
+      if (teacherState.boardGeometry) {
+        teacherState.boardGeometry.dispose();
+      }
+      if (teacherState.frameGeometry) {
+        teacherState.frameGeometry.dispose();
+      }
+      if (teacherState.board) {
+        teacherState.board.material.dispose();
+      }
+      if (teacherState.frame) {
+        teacherState.frame.material.dispose();
+      }
+      if (moduleState.seamLines) {
+        moduleState.seamLines.geometry.dispose();
+      }
+      clearGhPreviewMesh();
+      ghPreviewState.material.dispose();
+      ghPreviewState.edgeMaterial.dispose();
+      moduleState.seamMaterial.dispose();
       moduleState.geometry.dispose();
       moduleMaterial.dispose();
-      legMaterial.dispose();
       ground.geometry.dispose();
       ground.material.dispose();
       envTexture.dispose();
@@ -721,6 +1327,15 @@ export default function TableViewport({
       }
     };
   }, []);
+
+  useEffect(() => {
+    const state = sceneRef.current;
+    if (!state) {
+      return;
+    }
+
+    state.applyGhPreviewMesh(ghPreviewMesh);
+  }, [ghPreviewMesh]);
 
   useEffect(() => {
     const state = sceneRef.current;
@@ -773,6 +1388,17 @@ export default function TableViewport({
       return;
     }
 
+    state.partOverrides = partOverrides;
+    state.selectedPartId = selectedPartId;
+    state.updateTable(state.shapeState);
+  }, [partOverrides, selectedPartId]);
+
+  useEffect(() => {
+    const state = sceneRef.current;
+    if (!state) {
+      return;
+    }
+
     const profile = getShapeProfile(config);
     state.phase = phase;
     state.shapeState.shape = profile.shape;
@@ -795,9 +1421,9 @@ export default function TableViewport({
     const pose = getCameraPose(state.camera, profile, phase);
     state.controls.minDistance = pose.minDistance;
     state.controls.maxDistance = pose.maxDistance;
-    state.controls.enabled = phase === "configurator";
-    state.controls.enableZoom = phase === "configurator";
-    state.controls.autoRotate = phase !== "configurator";
+    state.controls.enabled = interactive && phase === "configurator";
+    state.controls.enableZoom = interactive && phase === "configurator";
+    state.controls.autoRotate = !interactive || phase !== "configurator";
 
     gsap.to(state.camera.position, {
       duration: phase === "configurator" ? 1.15 : 1.8,
@@ -840,12 +1466,8 @@ export default function TableViewport({
       }
     });
 
-    const materialValues =
-      MATERIAL_PRESETS[config.material] ?? MATERIAL_PRESETS.light_wood;
-    applyModuleMaterial(state.moduleMaterial, materialValues, config.patternMode);
-    applyLegMaterial(state.legMaterial, materialValues, config.finishColor);
-    state.applyScenario(config.scenario);
-  }, [config, phase]);
+    state.applyScenario(config.scenario, config.lightAngle);
+  }, [config, interactive, phase]);
 
   const vignette =
     SCENARIO_PRESETS[config.scenario]?.vignette ??
@@ -860,7 +1482,16 @@ export default function TableViewport({
         className="scene-shell__vignette"
         style={{ backgroundImage: vignette }}
       />
+      {ghPreviewActive ? (
+        <div className="scene-shell__badge">
+          {variantLabel ? `${variantLabel} · GH PREVIEW` : "GH PREVIEW ACTIVE"}
+        </div>
+      ) : variantLabel ? (
+        <div className="scene-shell__badge">{variantLabel}</div>
+      ) : null}
       <div className="scene-shell__canvas" ref={containerRef} />
     </div>
   );
-}
+});
+
+export default TableViewport;

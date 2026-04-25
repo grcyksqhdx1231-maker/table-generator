@@ -37,24 +37,25 @@ export const DEFAULT_CONFIG = {
   scenario: "daylight",
   shape: "rectangle",
   silhouetteMode: "shape",
-  width: 1.52,
-  depth: 0.84,
+  width: 1.4,
+  depth: 0.65,
   height: 0.76,
-  material: "light_wood",
+  material: "metal",
   patternMode: "metal",
-  moduleSize: 0.16,
-  moduleGap: 0.012,
+  moduleSize: 0.112,
+  moduleGap: 0.006,
   moduleThicknessScale: 1,
   patternPresence: 1.15,
   patternContrast: 1.4,
   patternBrightness: 1.18,
   patternRelief: 0.58,
   finishColor: "",
-  legShape: "round",
-  legLength: 0.68,
-  legWidth: 0.09,
-  legDepth: 0.09,
-  legCount: 4
+  legShape: "blade",
+  legLength: 0.73,
+  legWidth: 0.04,
+  legDepth: 0.076,
+  legCount: 4,
+  lightAngle: 38
 };
 
 export const SCENARIO_PRESETS = {
@@ -270,6 +271,16 @@ export function clampPatternRelief(value) {
   return Math.max(0, Math.min(1.25, Number(numeric.toFixed(2))));
 }
 
+export function clampLightAngle(value) {
+  const numeric = Number(value);
+
+  if (Number.isNaN(numeric)) {
+    return DEFAULT_CONFIG.lightAngle;
+  }
+
+  return Math.max(-75, Math.min(75, Number(numeric.toFixed(0))));
+}
+
 export function normalizeConfig(config) {
   const width = clampDimension(config?.width ?? DEFAULT_CONFIG.width);
   const depth = clampDimension(config?.depth ?? DEFAULT_CONFIG.depth);
@@ -302,6 +313,7 @@ export function normalizeConfig(config) {
   const patternRelief = clampPatternRelief(
     config?.patternRelief ?? DEFAULT_CONFIG.patternRelief
   );
+  const lightAngle = clampLightAngle(config?.lightAngle ?? DEFAULT_CONFIG.lightAngle);
 
   if (legLength > height - 0.05) {
     legLength = Math.max(0.42, Number((height - 0.05).toFixed(2)));
@@ -335,6 +347,7 @@ export function normalizeConfig(config) {
     patternContrast,
     patternBrightness,
     patternRelief,
+    lightAngle,
     finishColor: normalizeHexColor(config?.finishColor),
     legShape: legShapeValues.has(config?.legShape)
       ? config.legShape

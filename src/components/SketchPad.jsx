@@ -316,15 +316,12 @@ function summarizeStrokes(strokes, width, height) {
   };
 }
 
-function createMaskDataUrl(strokes, bounds) {
-  if (!bounds || !strokes.length) {
+function createMaskDataUrl(strokes, width, height) {
+  if (!strokes.length || !width || !height) {
     return "";
   }
 
-  const padding = 18;
   const maskCanvas = document.createElement("canvas");
-  const width = Math.max(24, Math.ceil(bounds.width + padding * 2));
-  const height = Math.max(24, Math.ceil(bounds.height + padding * 2));
   const context = maskCanvas.getContext("2d");
   maskCanvas.width = width;
   maskCanvas.height = height;
@@ -336,11 +333,7 @@ function createMaskDataUrl(strokes, bounds) {
     const shiftedStroke = {
       ...stroke,
       color: "#ffffff",
-      points: stroke.points.map((point) => ({
-        ...point,
-        x: point.x - bounds.x + padding,
-        y: point.y - bounds.y + padding
-      }))
+      points: stroke.points.map((point) => ({ ...point }))
     };
 
     drawStroke(context, shiftedStroke);
@@ -353,7 +346,9 @@ export default function SketchPad({
   onSketchChange,
   syncLabel,
   syncDetail,
-  floating = false
+  floating = false,
+  locale = "en",
+  transparentSurface = false
 }) {
   const canvasRef = useRef(null);
   const strokesRef = useRef([]);
@@ -373,7 +368,7 @@ export default function SketchPad({
     const context = canvas.getContext("2d");
     context.setTransform(dpr, 0, 0, dpr, 0, 0);
     context.clearRect(0, 0, width, height);
-    context.fillStyle = BACKGROUND;
+    context.fillStyle = transparentSurface ? "rgba(243, 239, 232, 0.48)" : BACKGROUND;
     context.fillRect(0, 0, width, height);
     drawTriangleGrid(context, width, height);
 
@@ -395,7 +390,7 @@ export default function SketchPad({
       ...summary,
       dataUrl: summary.hasContent ? canvas.toDataURL("image/png", 0.92) : "",
       maskDataUrl: summary.hasContent
-        ? createMaskDataUrl(strokesRef.current, summary.bounds)
+        ? createMaskDataUrl(strokesRef.current, width, height)
         : "",
       updatedAt: Date.now()
     });
@@ -494,25 +489,41 @@ export default function SketchPad({
   }
 
   return (
-    <section className={`sketchpad ${floating ? "sketchpad--floating" : ""}`}>
+    <section
+      className={`sketchpad ${floating ? "sketchpad--floating" : ""} ${
+        transparentSurface ? "sketchpad--transparent" : ""
+      }`}
+    >
       <div className="sketchpad__header">
         <div>
           <p className="panel__label">
-            {floating ? "Live Sketch Window" : "Sketch Surface"}
+            {locale === "zh"
+              ? floating
+                ? "实时草图窗口"
+                : "手绘调整区"
+              : floating
+                ? "Live Sketch Window"
+                : "Sketch Surface"}
           </p>
           <h2 className="sketchpad__title">
-            {floating ? "Draw here to reshape the table." : "Draw the tabletop from above."}
+            {locale === "zh"
+              ? floating
+                ? "在这里重塑桌子。"
+                : "沿着半透明模型画出新轮廓。"
+              : floating
+                ? "Draw here to reshape the table."
+                : "Draw over the translucent table."}
           </h2>
         </div>
         <button className="ghost-button" onClick={clearCanvas} type="button">
-          Clear Sheet
+          {locale === "zh" ? "清空画板" : "Clear Sheet"}
         </button>
       </div>
 
       <p className="sketchpad__lead">
-        {floating
-          ? "Pick a swatch, sketch the silhouette, and the tabletop updates in real time."
-          : "Use a mouse or pen to block out silhouette, proportion, and material cues."}
+        {locale === "zh"
+          ? "画笔不是替代老师的模型，而是在老师模型的模块化复刻上做局部推拉、收边和比例修正。"
+          : "The pen edits a modular replica of the teacher model, so sketching reshapes edges, proportion, and module density."}
       </p>
 
       <div className="sketchpad__surface">
@@ -540,7 +551,7 @@ export default function SketchPad({
           ))}
         </div>
         <label className="sketchpad__size">
-          <span className="panel__label">Brush</span>
+          <span className="panel__label">{locale === "zh" ? "画笔" : "Brush"}</span>
           <input
             className="slider"
             max="26"

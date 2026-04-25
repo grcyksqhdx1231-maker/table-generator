@@ -1,8 +1,8 @@
-import { getDraftLabel } from "../lib/catalog";
+import { getLocalizedDraftLabel, getLocalizedOptionLabel, t } from "../lib/i18n";
 
-function formatDate(value) {
+function formatDate(value, locale) {
   try {
-    return new Intl.DateTimeFormat("zh-CN", {
+    return new Intl.DateTimeFormat(locale === "zh" ? "zh-CN" : "en-US", {
       month: "2-digit",
       day: "2-digit",
       hour: "2-digit",
@@ -17,24 +17,23 @@ export default function DraftDrawer({
   drafts,
   isOpen,
   onClose,
-  onSelectDraft
+  onSelectDraft,
+  locale
 }) {
   return (
     <aside className={`drafts ${isOpen ? "is-open" : ""}`}>
       <div className="drafts__header">
         <div>
-          <p className="panel__label">Saved Drafts</p>
-          <h2 className="drafts__title">Material memories</h2>
+          <p className="panel__label">{t(locale, "drafts.eyebrow")}</p>
+          <h2 className="drafts__title">{t(locale, "drafts.title")}</h2>
         </div>
         <button className="icon-button" onClick={onClose} type="button">
-          Close
+          {t(locale, "drafts.close")}
         </button>
       </div>
 
       {drafts.length === 0 ? (
-        <p className="drafts__empty">
-          No draft yet. Save a composition to compare it later.
-        </p>
+        <p className="drafts__empty">{t(locale, "drafts.empty")}</p>
       ) : (
         <div className="drafts__list">
           {drafts.map((draft) => (
@@ -46,10 +45,11 @@ export default function DraftDrawer({
             >
               <span className="draft-card__label">{draft.label}</span>
               <strong className="draft-card__title">
-                {getDraftLabel(draft.config)}
+                {getLocalizedDraftLabel(draft.config, locale)}
               </strong>
               <span className="draft-card__meta">
-                {draft.config.scenario.replace("_", " ")} / {formatDate(draft.createdAt)}
+                {getLocalizedOptionLabel(locale, "scenario", draft.config.scenario)} /{" "}
+                {formatDate(draft.createdAt, locale)}
               </span>
             </button>
           ))}

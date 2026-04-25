@@ -32,6 +32,47 @@ function pointInPolygon(point, polygon) {
   return inside;
 }
 
+function distancePointToSegment(point, start, end) {
+  const dx = end.x - start.x;
+  const dz = end.z - start.z;
+  const lengthSquared = dx * dx + dz * dz;
+
+  if (!lengthSquared) {
+    return Math.hypot(point.x - start.x, point.z - start.z);
+  }
+
+  const t = Math.max(
+    0,
+    Math.min(
+      1,
+      ((point.x - start.x) * dx + (point.z - start.z) * dz) / lengthSquared
+    )
+  );
+
+  const projectionX = start.x + dx * t;
+  const projectionZ = start.z + dz * t;
+  return Math.hypot(point.x - projectionX, point.z - projectionZ);
+}
+
+function distanceToPolygonEdge(point, polygon) {
+  if (!polygon.length) {
+    return Number.POSITIVE_INFINITY;
+  }
+
+  let minDistance = Number.POSITIVE_INFINITY;
+
+  for (let index = 0; index < polygon.length; index += 1) {
+    const current = polygon[index];
+    const next = polygon[(index + 1) % polygon.length];
+    minDistance = Math.min(
+      minDistance,
+      distancePointToSegment(point, current, next)
+    );
+  }
+
+  return minDistance;
+}
+
 function isTriangleInsideShape(triangle, outline) {
   if (pointInPolygon(triangle.centroid, outline)) {
     return true;
@@ -112,6 +153,7 @@ export function generateTriangleCells(
   {
     outlinePoints = [],
     useSketchMask = false,
+    localMaskMode = false,
     maskSampler = null
   } = {}
 ) {
@@ -157,9 +199,19 @@ export function generateTriangleCells(
         const sampleValue = maskSampler
           ? maskSampler(triangle.u, triangle.v)
           : 0;
-        const include = useSketchMask
-          ? sampleValue > 0.18
-          : isTriangleInsideShape(triangle, shapeOutline);
+        const baseInside = isTriangleInsideShape(triangle, shapeOutline);
+        const edgeDistance = distanceToPolygonEdge(triangle.centroid, shapeOutline);
+        let include = baseInside;
+
+        if (useSketchMask) {
+          include = sampleValue > 0.18;
+        } else if (localMaskMode && sampleValue > 0.18) {
+          if (baseInside) {
+            include = edgeDistance > side * 1.05;
+          } else {
+            include = edgeDistance < side * 1.65;
+          }
+        }
 
         if (include) {
           cells.push({
@@ -168,7 +220,11 @@ export function generateTriangleCells(
             rotation: triangle.rotation,
             u: triangle.u,
             v: triangle.v,
-            maskValue: sampleValue
+            maskValue: sampleValue,
+            vertices: triangle.vertices.map((vertex) => ({
+              x: vertex.x,
+              z: vertex.z
+            }))
           });
         }
       });

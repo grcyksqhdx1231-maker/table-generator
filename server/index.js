@@ -1532,7 +1532,7 @@ app.post("/api/quote-scenes/generate", async (request, response) => {
 if (isProduction) {
   app.use(express.static(distDir));
 
-  app.get("*", (_request, response) => {
+  app.get(/.*/, (_request, response) => {
     response.sendFile(path.join(distDir, "index.html"));
   });
 }

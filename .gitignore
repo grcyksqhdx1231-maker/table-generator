@@ -1,6 +1,7 @@
 node_modules
 dist
 .env
+.npm-cache/
 bridge/
 public/generated-scenes/
 .DS_Store

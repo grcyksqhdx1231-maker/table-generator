@@ -1,9 +1,11 @@
-﻿import { useEffect, useRef, useState } from "react";
+﻿import { useEffect, useMemo, useRef, useState } from "react";
 import ChatDock from "./components/ChatDock";
 import ControlPanel from "./components/ControlPanel";
 import DraftDrawer from "./components/DraftDrawer";
+import GalleryPage from "./components/GalleryPage";
 import LandingView from "./components/LandingView";
 import PartEditorOverlay from "./components/PartEditorOverlay";
+import ProfilePage from "./components/ProfilePage";
 import QuotePage from "./components/QuotePage";
 import SketchPad from "./components/SketchPad";
 import TableViewport from "./components/TableViewport";
@@ -13,8 +15,27 @@ import {
   SCENARIO_PRESETS,
   normalizeConfig
 } from "./lib/catalog";
-import { getLocalizedDraftLabel, t } from "./lib/i18n";
-import { loadDrafts, saveDrafts } from "./lib/storage";
+import { getLocalizedDraftLabel, getLocalizedOptionLabel, t } from "./lib/i18n";
+import {
+  buildCartItemFromGalleryItem,
+  createGallerySeriesFromSource,
+  createGalleryUploadFromSource,
+  GALLERY_SEEDS
+} from "./lib/marketplace";
+import {
+  loadCart,
+  loadDrafts,
+  loadFavorites,
+  loadGalleryUploads,
+  loadProfile,
+  loadTradeInLeads,
+  saveCart,
+  saveDrafts,
+  saveFavorites,
+  saveGalleryUploads,
+  saveProfile,
+  saveTradeInLeads
+} from "./lib/storage";
 import { DEFAULT_PART_MATERIALS } from "./lib/ecoMaterials";
 
 const EMPTY_SKETCH = {
@@ -51,6 +72,30 @@ const DEFAULT_LOCKS = {
   legs: false
 };
 
+function getStudioCopy(locale) {
+  if (locale === "zh") {
+    return {
+      eyebrow: "实时配置工作台",
+      title: "参数化桌面配置",
+      note: "左侧调参并手绘，右侧实时查看结构与部件。",
+      sketch: "手绘轮廓",
+      sketchDetail: "沿参考轮廓继续改形",
+      render: "实时模型",
+      renderDetail: "旋转、缩放并编辑部件"
+    };
+  }
+
+  return {
+    eyebrow: "Live Design Studio",
+    title: "Parametric Table Configuration",
+    note: "Adjust parameters and sketch on the left while editing the live model on the right.",
+    sketch: "Sketch Outline",
+    sketchDetail: "Draw over the reference silhouette",
+    render: "Live Render",
+    renderDetail: "Orbit, inspect, and edit parts"
+  };
+}
+
 const CONFIG_KEYS = [
   "scenario",
   "shape",
@@ -67,6 +112,14 @@ const CONFIG_KEYS = [
   "legLength",
   "legWidth",
   "legDepth",
+  "frameInset",
+  "frameThickness",
+  "legSpread",
+  "legTopDepth",
+  "legBottomDepth",
+  "legBellyDepth",
+  "legToeWidth",
+  "legToeSharpness",
   "legCount",
   "lightAngle"
 ];
@@ -112,24 +165,27 @@ function buildSketchMetadata(snapshot) {
 }
 
 function buildSketchSilhouettePatch(snapshot, currentConfig) {
-  const aspectRatio = Math.max(0.32, Math.min(3.2, Number(snapshot?.aspectRatio || 1)));
-  const currentArea = Math.max(0.42, (currentConfig.width || 1.4) * (currentConfig.depth || 0.65));
-  const boundsScale = Math.max(
-    0.72,
-    Math.min(
-      1.18,
-      Math.sqrt(
-        Math.max(0.08, Number(snapshot?.boundsWidthRatio || 0.82)) *
-          Math.max(0.08, Number(snapshot?.boundsHeightRatio || 0.82))
-      ) * 1.32
-    )
+  const boundsWidthRatio = Math.max(
+    0.12,
+    Math.min(1, Number(snapshot?.boundsWidthRatio || 0.82))
   );
-  const targetArea = currentArea * boundsScale;
+  const boundsHeightRatio = Math.max(
+    0.12,
+    Math.min(1, Number(snapshot?.boundsHeightRatio || 0.82))
+  );
+  const dominantSketchSpan = Math.max(boundsWidthRatio, boundsHeightRatio, 0.12);
+  const dominantCurrentSpan = Math.max(currentConfig.width || 1.4, currentConfig.depth || 0.65);
+  const coverageScale = Math.max(
+    0.84,
+    Math.min(1.18, 0.92 + (Number(snapshot?.coverage || 0.16) - 0.16) * 1.35)
+  );
+  const worldScale = (dominantCurrentSpan * coverageScale) / dominantSketchSpan;
 
   return {
     silhouetteMode: "sketch",
-    width: Math.max(0.65, Math.min(2.4, Number(Math.sqrt(targetArea * aspectRatio).toFixed(2)))),
-    depth: Math.max(0.65, Math.min(2.4, Number(Math.sqrt(targetArea / aspectRatio).toFixed(2))))
+    shape: "rectangle",
+    width: Number((boundsWidthRatio * worldScale).toFixed(2)),
+    depth: Number((boundsHeightRatio * worldScale).toFixed(2))
   };
 }
 
@@ -246,7 +302,7 @@ function buildLocalUnderstanding(sketchSnapshot, locks, locale = "en") {
       ? "Sketch is attached as a local tabletop refinement reference."
       : "The current table is being guided by prompt and manual controls.",
     intent: sketchSnapshot?.hasContent
-      ? "Modify the teacher-style base locally instead of regenerating the whole table."
+      ? "Modify the current base locally instead of regenerating the whole table."
       : "Establish the next overall direction.",
     constraints: buildLockSummary(locks, locale),
     sketchInfluence: sketchSnapshot?.hasContent
@@ -427,6 +483,15 @@ function getDefaultPartOverride(partKind) {
     };
   }
 
+  if (partKind === "modules") {
+    return {
+      materialKey: DEFAULT_PART_MATERIALS.tabletop,
+      tint: "#6e675f",
+      moduleSizeScale: 1,
+      thicknessScale: 1
+    };
+  }
+
   return {
     materialKey: DEFAULT_PART_MATERIALS.legs,
     tint: "#5f6267",
@@ -434,6 +499,101 @@ function getDefaultPartOverride(partKind) {
     depthScale: 1,
     lengthScale: 1
   };
+}
+
+function normalizeHexColor(value) {
+  const raw = String(value || "").trim().replace("#", "");
+
+  if (!/^[0-9a-fA-F]{3}([0-9a-fA-F]{3})?$/.test(raw)) {
+    return "";
+  }
+
+  const hex = raw.length === 3
+    ? raw
+        .split("")
+        .map((fragment) => `${fragment}${fragment}`)
+        .join("")
+    : raw;
+
+  return `#${hex.toLowerCase()}`;
+}
+
+function inferColorFamilyFromTint(tint, material = "metal") {
+  const normalized = normalizeHexColor(tint);
+
+  if (!normalized) {
+    if (material === "dark_walnut") {
+      return "brown";
+    }
+
+    if (material === "light_wood") {
+      return "beige";
+    }
+
+    if (material === "rough_stone") {
+      return "gray";
+    }
+
+    return "black";
+  }
+
+  const r = parseInt(normalized.slice(1, 3), 16) / 255;
+  const g = parseInt(normalized.slice(3, 5), 16) / 255;
+  const b = parseInt(normalized.slice(5, 7), 16) / 255;
+  const max = Math.max(r, g, b);
+  const min = Math.min(r, g, b);
+  const delta = max - min;
+  const lightness = (max + min) / 2;
+
+  if (delta < 0.08) {
+    if (lightness < 0.22) {
+      return "black";
+    }
+
+    if (lightness < 0.62) {
+      return "gray";
+    }
+
+    return "beige";
+  }
+
+  let hue = 0;
+
+  if (max === r) {
+    hue = ((g - b) / delta) % 6;
+  } else if (max === g) {
+    hue = (b - r) / delta + 2;
+  } else {
+    hue = (r - g) / delta + 4;
+  }
+
+  hue = Math.round(hue * 60);
+
+  if (hue < 0) {
+    hue += 360;
+  }
+
+  if (hue < 20 || hue >= 345) {
+    return "red";
+  }
+
+  if (hue < 50) {
+    return "brown";
+  }
+
+  if (hue < 170) {
+    return "beige";
+  }
+
+  if (hue < 255) {
+    return "blue";
+  }
+
+  if (hue < 320) {
+    return "purple";
+  }
+
+  return "red";
 }
 
 function buildLocalDirectionResult(prompt, currentConfig, sketchSnapshot, locks, locale = "en") {
@@ -658,6 +818,11 @@ export default function App() {
   const [phase, setPhase] = useState("landing");
   const [config, setConfig] = useState(DEFAULT_CONFIG);
   const [drafts, setDrafts] = useState(() => loadDrafts());
+  const [profile, setProfile] = useState(() => loadProfile());
+  const [favorites, setFavorites] = useState(() => loadFavorites());
+  const [cart, setCart] = useState(() => loadCart());
+  const [galleryUploads, setGalleryUploads] = useState(() => loadGalleryUploads());
+  const [tradeInLeads, setTradeInLeads] = useState(() => loadTradeInLeads());
   const [draftDrawerOpen, setDraftDrawerOpen] = useState(false);
   const [busy, setBusy] = useState(false);
   const [status, setStatus] = useState("");
@@ -707,6 +872,26 @@ export default function App() {
   useEffect(() => {
     saveDrafts(drafts);
   }, [drafts]);
+
+  useEffect(() => {
+    saveProfile(profile);
+  }, [profile]);
+
+  useEffect(() => {
+    saveFavorites(favorites);
+  }, [favorites]);
+
+  useEffect(() => {
+    saveCart(cart);
+  }, [cart]);
+
+  useEffect(() => {
+    saveGalleryUploads(galleryUploads);
+  }, [galleryUploads]);
+
+  useEffect(() => {
+    saveTradeInLeads(tradeInLeads);
+  }, [tradeInLeads]);
 
   useEffect(() => {
     let active = true;
@@ -819,6 +1004,136 @@ export default function App() {
     setStatus("Quote page opened.");
   }
 
+  function handleGoGallery() {
+    setDraftDrawerOpen(false);
+    setPhase("gallery");
+    setStatus(locale === "zh" ? "\u5df2\u6253\u5f00 Gallery\u3002" : "Gallery opened.");
+  }
+
+  function handleGoProfile() {
+    setDraftDrawerOpen(false);
+    setPhase("profile");
+    setStatus(locale === "zh" ? "\u5df2\u6253\u5f00\u4e2a\u4eba\u4e3b\u9875\u3002" : "Profile opened.");
+  }
+
+  function handleSaveProfile(nextProfile) {
+    setProfile(nextProfile);
+    setStatus(locale === "zh" ? "\u4e2a\u4eba\u8d44\u6599\u5df2\u4fdd\u5b58\u3002" : "Profile saved.");
+  }
+
+  function handleToggleFavorite(itemId) {
+    const alreadyFavorite = favorites.includes(itemId);
+
+    setFavorites((current) =>
+      alreadyFavorite
+        ? current.filter((id) => id !== itemId)
+        : [itemId, ...current]
+    );
+
+    setStatus(
+      locale === "zh"
+        ? alreadyFavorite
+          ? "\u5df2\u53d6\u6d88\u6536\u85cf\u3002"
+          : "\u5df2\u52a0\u5165\u6536\u85cf\u3002"
+        : alreadyFavorite
+          ? "Removed from favorites."
+          : "Added to favorites."
+    );
+  }
+
+  function handleAddToCart(item) {
+    const nextItem = buildCartItemFromGalleryItem(item);
+
+    setCart((current) => {
+      const existing = current.find((entry) => entry.galleryItemId === item.id);
+
+      if (existing) {
+        return current.map((entry) =>
+          entry.galleryItemId === item.id
+            ? {
+                ...entry,
+                qty: entry.qty + 1
+              }
+            : entry
+        );
+      }
+
+      return [nextItem, ...current];
+    });
+
+    setStatus(locale === "zh" ? "\u5df2\u52a0\u5165\u8d2d\u7269\u8f66\u3002" : "Added to cart.");
+  }
+
+  function handleRemoveCartItem(cartItemId) {
+    setCart((current) => current.filter((item) => item.id !== cartItemId));
+  }
+
+  function handleUpdateCartQty(cartItemId, nextQty) {
+    const quantity = Math.max(0, Number(nextQty || 0));
+
+    setCart((current) => {
+      if (quantity <= 0) {
+        return current.filter((item) => item.id !== cartItemId);
+      }
+
+      return current.map((item) =>
+        item.id === cartItemId
+          ? {
+              ...item,
+              qty: quantity
+            }
+          : item
+      );
+    });
+  }
+
+  function handleUploadCurrentDesignToGallery() {
+    const series = createGallerySeriesFromSource({
+      baseId: crypto.randomUUID(),
+      config: configRef.current,
+      label: getLocalizedDraftLabel(configRef.current, locale),
+      sourceLabelZh: "\u6765\u81ea\u5f53\u524d\u914d\u7f6e",
+      sourceLabelEn: "From current configuration"
+    });
+
+    setGalleryUploads((current) => [...series, ...current].slice(0, 84));
+    setPhase("gallery");
+    setStatus(
+      locale === "zh"
+        ? "\u5df2\u751f\u6210\u5f53\u524d\u65b9\u6848\u7684 7 \u8272\u7cfb\u5217\u3002"
+        : "Generated a 7-color series from the current design."
+    );
+  }
+
+  function handleUploadDraftToGallery(draft) {
+    const upload = createGalleryUploadFromSource({
+      id: crypto.randomUUID(),
+      config: draft.config,
+      label: draft.label,
+      material: draft.config.material,
+      colorFamily: inferColorFamilyFromTint(draft.config.finishColor, draft.config.material),
+      sourceLabelZh: "\u6765\u81ea\u8349\u7a3f\u5e93",
+      sourceLabelEn: "From saved drafts"
+    });
+
+    setGalleryUploads((current) => [upload, ...current].slice(0, 84));
+    setDraftDrawerOpen(false);
+    setPhase("gallery");
+    setStatus(locale === "zh" ? "\u8349\u7a3f\u5df2\u4e0a\u4f20\u5230 Gallery\u3002" : "Draft uploaded to Gallery.");
+  }
+
+  function handleSubmitTradeIn(submission) {
+    setTradeInLeads((current) => [
+      {
+        ...submission,
+        id: crypto.randomUUID(),
+        createdAt: new Date().toISOString()
+      },
+      ...current
+    ].slice(0, 12));
+    setStatus(locale === "zh" ? "\u6362\u65b0\u8bc4\u4f30\u5df2\u751f\u6210\u3002" : "Trade-in evaluation created.");
+  }
+
   function handleTabletopTintChange(tint) {
     invalidateGhPreviewMesh(
       "Tabletop color updated. Send to GH again to refresh."
@@ -850,6 +1165,19 @@ export default function App() {
 
       return next;
     });
+  }
+
+  function handleModuleTintChange(tint) {
+    invalidateGhPreviewMesh(
+      "Module color updated. Send to GH again to refresh."
+    );
+    setPartOverrides((current) => ({
+      ...current,
+      modules: {
+        ...(current.modules || getDefaultPartOverride("modules")),
+        tint
+      }
+    }));
   }
 
   function handleSaveDraft() {
@@ -898,7 +1226,9 @@ export default function App() {
         current.summary ? current : EMPTY_UNDERSTANDING
       );
       invalidateGhPreviewMesh(
-        "Sketch cleared. Back to web preview."
+        locale === "zh"
+          ? "草图已清空，已回到网页基础预览。"
+          : "Sketch cleared. Back to the base web preview."
       );
       setConfig((current) =>
         current.silhouetteMode === "sketch"
@@ -1308,6 +1638,11 @@ export default function App() {
     setStatus(t(locale, "status.partUpdated", { label: selectedPart.label }));
   }
 
+  const galleryItems = useMemo(() => [
+    ...galleryUploads,
+    ...GALLERY_SEEDS
+  ], [galleryUploads]);
+
   const sceneTheme =
     SCENARIO_PRESETS[config.scenario] ?? SCENARIO_PRESETS.daylight;
   const sketchMaskDataUrl = sketchSnapshot.hasContent
@@ -1316,7 +1651,11 @@ export default function App() {
   const sketchOutline = sketchSnapshot.hullNormalized || [];
   const tabletopTint =
     partOverrides.tabletop?.tint || getDefaultPartOverride("tabletop").tint;
+  const moduleTint =
+    partOverrides.modules?.tint || getDefaultPartOverride("modules").tint;
   const legTint = partOverrides["leg-1"]?.tint || getDefaultPartOverride("leg").tint;
+  const studioCopy = getStudioCopy(locale);
+  const sizeLabel = `${config.width.toFixed(2)} x ${config.depth.toFixed(2)} x ${config.height.toFixed(2)} m`;
 
   return (
     <main
@@ -1326,7 +1665,7 @@ export default function App() {
         "--panel-line": config.scenario === "late_night" ? "#40342d" : "#d9d0c4"
       }}
     >
-      {phase !== "quote" ? (
+      {phase === "configurator" ? (
         <div className={`app__workspace ${phase === "configurator" ? "is-active" : ""}`}>
           <aside className="workspace__rail">
             <section className="workspace__controls">
@@ -1336,14 +1675,18 @@ export default function App() {
                 legTint={legTint}
                 locale={locale}
                 onConfigChange={updateConfig}
+                onGoGallery={handleGoGallery}
                 onGoHome={handleGoHome}
+                onGoProfile={handleGoProfile}
                 onGoQuote={handleGoQuote}
                 onLegTintChange={handleLegTintChange}
                 onLocaleChange={setLocale}
+                onModuleTintChange={handleModuleTintChange}
                 onOpenDrafts={() => setDraftDrawerOpen(true)}
                 onSaveDraft={handleSaveDraft}
                 onTabletopTintChange={handleTabletopTintChange}
                 sketchHasContent={sketchSnapshot.hasContent}
+                moduleTint={moduleTint}
                 tabletopTint={tabletopTint}
               />
             </section>
@@ -1351,61 +1694,98 @@ export default function App() {
 
           <section className="workspace__pane workspace__pane--preview">
             {phase === "configurator" ? (
-              <div className="design-board">
-                <section className="design-board__sketch">
-                  <div className="sketch-board__underlay">
-                    <TableViewport
-                      config={config}
-                      ghPreviewMesh={ghPreviewMesh}
-                      interactive={false}
-                      patternAsset={patternAsset}
-                      phase="configurator"
-                      partOverrides={partOverrides}
-                      sketchMaskDataUrl={sketchMaskDataUrl}
-                      sketchOutline={sketchOutline}
-                    />
+              <div className="preview-shell">
+                <header className="preview-shell__header">
+                  <div className="preview-shell__copy">
+                    <p className="panel__label">{studioCopy.eyebrow}</p>
+                    <h1 className="panel__title">{studioCopy.title}</h1>
+                    <p className="panel__lead">{studioCopy.note}</p>
                   </div>
-                  <div className="sketch-board__pad">
-                    <SketchPad
-                      locale={locale}
-                      onSketchChange={handleSketchChange}
-                      syncDetail={sketchState.detail}
-                      syncLabel={sketchState.label}
-                      transparentSurface
-                    />
-                  </div>
-                </section>
 
-                <section className="design-board__render">
-                  <div className="render-stage">
-                    <TableViewport
-                      config={config}
-                      ghPreviewMesh={ghPreviewMesh}
-                      onSelectPart={handleSelectPart}
-                      patternAsset={patternAsset}
-                      phase="configurator"
-                      partOverrides={partOverrides}
-                      selectedPartId={selectedPart?.id || ""}
-                      sketchMaskDataUrl={sketchMaskDataUrl}
-                      sketchOutline={sketchOutline}
-                    />
-                    <PartEditorOverlay
-                      locale={locale}
-                      onApplyInstruction={handleApplyPartInstruction}
-                      onClose={() => setSelectedPart(null)}
-                      onOverrideChange={(patch) =>
-                        selectedPart ? handlePartOverrideChange(selectedPart.id, patch) : null
-                      }
-                      partOverride={
-                        selectedPart
-                          ? partOverrides[selectedPart.id] ||
-                            getDefaultPartOverride(selectedPart.kind)
-                          : getDefaultPartOverride("tabletop")
-                      }
-                      selectedPart={selectedPart}
-                    />
+                  <div className="preview-shell__chips">
+                    <span className="status-chip is-ready">{sizeLabel}</span>
+                    <span className="status-chip">
+                      {getLocalizedOptionLabel(locale, "shape", config.shape)}
+                    </span>
+                    <span className="status-chip">
+                      {getLocalizedOptionLabel(locale, "material", config.material)}
+                    </span>
                   </div>
-                </section>
+                </header>
+
+                <div className="design-board">
+                  <section className="design-board__sketch">
+                    <div className="design-board__head">
+                      <div>
+                        <p className="panel__label">{studioCopy.sketch}</p>
+                        <h2 className="panel__mini-title">{studioCopy.sketchDetail}</h2>
+                      </div>
+                    </div>
+                    <div className="design-board__body">
+                      <div className="sketch-board__underlay">
+                        <TableViewport
+                          config={config}
+                          ghPreviewMesh={ghPreviewMesh}
+                          interactive={false}
+                          patternAsset={patternAsset}
+                          phase="configurator"
+                          partOverrides={partOverrides}
+                          sketchMaskDataUrl={sketchMaskDataUrl}
+                          sketchOutline={sketchOutline}
+                        />
+                      </div>
+                      <div className="sketch-board__pad">
+                        <SketchPad
+                          locale={locale}
+                          onSketchChange={handleSketchChange}
+                          syncDetail={sketchState.detail}
+                          syncLabel={sketchState.label}
+                          transparentSurface
+                        />
+                      </div>
+                    </div>
+                  </section>
+
+                  <section className="design-board__render">
+                    <div className="design-board__head">
+                      <div>
+                        <p className="panel__label">{studioCopy.render}</p>
+                        <h2 className="panel__mini-title">{studioCopy.renderDetail}</h2>
+                      </div>
+                    </div>
+
+                    <div className="design-board__body">
+                      <div className="render-stage">
+                        <TableViewport
+                          config={config}
+                          ghPreviewMesh={ghPreviewMesh}
+                          onSelectPart={handleSelectPart}
+                          patternAsset={patternAsset}
+                          phase="configurator"
+                          partOverrides={partOverrides}
+                          selectedPartId={selectedPart?.id || ""}
+                          sketchMaskDataUrl={sketchMaskDataUrl}
+                          sketchOutline={sketchOutline}
+                        />
+                        <PartEditorOverlay
+                          locale={locale}
+                          onApplyInstruction={handleApplyPartInstruction}
+                          onClose={() => setSelectedPart(null)}
+                          onOverrideChange={(patch) =>
+                            selectedPart ? handlePartOverrideChange(selectedPart.id, patch) : null
+                          }
+                          partOverride={
+                            selectedPart
+                              ? partOverrides[selectedPart.id] ||
+                                getDefaultPartOverride(selectedPart.kind)
+                              : getDefaultPartOverride("tabletop")
+                          }
+                          selectedPart={selectedPart}
+                        />
+                      </div>
+                    </div>
+                  </section>
+                </div>
               </div>
             ) : (
               <div className="preview-stage">
@@ -1424,6 +1804,41 @@ export default function App() {
           </section>
         </div>
       ) : null}
+
+      <GalleryPage
+        cart={cart}
+        drafts={drafts}
+        favorites={favorites}
+        galleryItems={galleryItems}
+        locale={locale}
+        onAddToCart={handleAddToCart}
+        onBack={() => setPhase("configurator")}
+        onHome={handleGoHome}
+        onOpenProfile={handleGoProfile}
+        onToggleFavorite={handleToggleFavorite}
+        onUploadCurrentDesign={handleUploadCurrentDesignToGallery}
+        onUploadDraft={handleUploadDraftToGallery}
+        visible={phase === "gallery"}
+      />
+
+      <ProfilePage
+        cart={cart}
+        favorites={favorites}
+        galleryItems={galleryItems}
+        locale={locale}
+        onAddToCart={handleAddToCart}
+        onBack={() => setPhase("configurator")}
+        onHome={handleGoHome}
+        onOpenGallery={handleGoGallery}
+        onRemoveCartItem={handleRemoveCartItem}
+        onSaveProfile={handleSaveProfile}
+        onSubmitTradeIn={handleSubmitTradeIn}
+        onToggleFavorite={handleToggleFavorite}
+        onUpdateCartQty={handleUpdateCartQty}
+        profile={profile}
+        tradeInLeads={tradeInLeads}
+        visible={phase === "profile"}
+      />
 
       <QuotePage
         config={config}
@@ -1475,6 +1890,7 @@ export default function App() {
         locale={locale}
         onClose={() => setDraftDrawerOpen(false)}
         onSelectDraft={handleSelectDraft}
+        onUploadDraftToGallery={handleUploadDraftToGallery}
       />
     </main>
   );

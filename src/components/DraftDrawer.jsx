@@ -18,6 +18,7 @@ export default function DraftDrawer({
   isOpen,
   onClose,
   onSelectDraft,
+  onUploadDraftToGallery,
   locale
 }) {
   return (
@@ -37,12 +38,7 @@ export default function DraftDrawer({
       ) : (
         <div className="drafts__list">
           {drafts.map((draft) => (
-            <button
-              key={draft.id}
-              className="draft-card"
-              onClick={() => onSelectDraft(draft)}
-              type="button"
-            >
+            <article key={draft.id} className="draft-card">
               <span className="draft-card__label">{draft.label}</span>
               <strong className="draft-card__title">
                 {getLocalizedDraftLabel(draft.config, locale)}
@@ -51,7 +47,23 @@ export default function DraftDrawer({
                 {getLocalizedOptionLabel(locale, "scenario", draft.config.scenario)} /{" "}
                 {formatDate(draft.createdAt, locale)}
               </span>
-            </button>
+              <div className="panel__actions panel__actions--wrap">
+                <button
+                  className="ghost-button"
+                  onClick={() => onSelectDraft(draft)}
+                  type="button"
+                >
+                  {locale === "zh" ? "恢复方案" : "Restore"}
+                </button>
+                <button
+                  className="primary-button"
+                  onClick={() => onUploadDraftToGallery(draft)}
+                  type="button"
+                >
+                  {locale === "zh" ? "上传到 Gallery" : "Upload To Gallery"}
+                </button>
+              </div>
+            </article>
           ))}
         </div>
       )}

@@ -54,9 +54,21 @@ export const DEFAULT_CONFIG = {
   legLength: 0.73,
   legWidth: 0.04,
   legDepth: 0.076,
+  frameInset: 0.019,
+  frameThickness: 0.025,
+  legSpread: 0,
+  legTopDepth: 0.076,
+  legBottomDepth: 0.004,
+  legBellyDepth: 0,
+  legToeWidth: 0.004,
+  legToeSharpness: 0.6,
   legCount: 4,
   lightAngle: 38
 };
+
+export const MIN_OVERALL_HEIGHT = 0.47;
+export const MIN_TABLETOP_RISE = 0.05;
+export const MAX_TABLETOP_RISE = 0.09;
 
 export const SCENARIO_PRESETS = {
   daylight: {
@@ -168,7 +180,7 @@ export function clampHeight(value) {
     return DEFAULT_CONFIG.height;
   }
 
-  return Math.max(0.56, Math.min(1.12, Number(numeric.toFixed(2))));
+  return Math.max(MIN_OVERALL_HEIGHT, Math.min(1.12, Number(numeric.toFixed(2))));
 }
 
 export function clampLegLength(value) {
@@ -281,6 +293,48 @@ export function clampLightAngle(value) {
   return Math.max(-75, Math.min(75, Number(numeric.toFixed(0))));
 }
 
+function clampTeacherMetric(value, fallback, min, max, digits = 3) {
+  const numeric = Number(value);
+
+  if (Number.isNaN(numeric)) {
+    return fallback;
+  }
+
+  return Math.max(min, Math.min(max, Number(numeric.toFixed(digits))));
+}
+
+export function clampFrameInset(value) {
+  return clampTeacherMetric(value, DEFAULT_CONFIG.frameInset, 0.008, 0.08);
+}
+
+export function clampFrameThickness(value) {
+  return clampTeacherMetric(value, DEFAULT_CONFIG.frameThickness, 0.012, 0.08);
+}
+
+export function clampLegSpread(value) {
+  return clampTeacherMetric(value, DEFAULT_CONFIG.legSpread, -0.04, 0.08);
+}
+
+export function clampLegTopDepth(value) {
+  return clampTeacherMetric(value, DEFAULT_CONFIG.legTopDepth, 0.03, 0.18);
+}
+
+export function clampLegBottomDepth(value) {
+  return clampTeacherMetric(value, DEFAULT_CONFIG.legBottomDepth, 0.002, 0.08);
+}
+
+export function clampLegBellyDepth(value) {
+  return clampTeacherMetric(value, DEFAULT_CONFIG.legBellyDepth, 0, 0.08);
+}
+
+export function clampLegToeWidth(value) {
+  return clampTeacherMetric(value, DEFAULT_CONFIG.legToeWidth, 0.002, 0.04);
+}
+
+export function clampLegToeSharpness(value) {
+  return clampTeacherMetric(value, DEFAULT_CONFIG.legToeSharpness, 0, 1, 2);
+}
+
 export function normalizeConfig(config) {
   const width = clampDimension(config?.width ?? DEFAULT_CONFIG.width);
   const depth = clampDimension(config?.depth ?? DEFAULT_CONFIG.depth);
@@ -314,13 +368,33 @@ export function normalizeConfig(config) {
     config?.patternRelief ?? DEFAULT_CONFIG.patternRelief
   );
   const lightAngle = clampLightAngle(config?.lightAngle ?? DEFAULT_CONFIG.lightAngle);
+  const frameInset = clampFrameInset(config?.frameInset ?? DEFAULT_CONFIG.frameInset);
+  const frameThickness = clampFrameThickness(
+    config?.frameThickness ?? DEFAULT_CONFIG.frameThickness
+  );
+  const legSpread = clampLegSpread(config?.legSpread ?? DEFAULT_CONFIG.legSpread);
+  const legTopDepth = clampLegTopDepth(config?.legTopDepth ?? config?.legDepth);
+  const legBottomDepth = clampLegBottomDepth(
+    config?.legBottomDepth ?? DEFAULT_CONFIG.legBottomDepth
+  );
+  const legBellyDepth = clampLegBellyDepth(
+    config?.legBellyDepth ?? DEFAULT_CONFIG.legBellyDepth
+  );
+  const legToeWidth = clampLegToeWidth(config?.legToeWidth ?? DEFAULT_CONFIG.legToeWidth);
+  const legToeSharpness = clampLegToeSharpness(
+    config?.legToeSharpness ?? DEFAULT_CONFIG.legToeSharpness
+  );
 
-  if (legLength > height - 0.05) {
-    legLength = Math.max(0.42, Number((height - 0.05).toFixed(2)));
+  if (legLength > height - MIN_TABLETOP_RISE) {
+    legLength = Math.max(0.42, Number((height - MIN_TABLETOP_RISE).toFixed(2)));
   }
 
-  if (height < legLength + 0.05) {
-    height = clampHeight(legLength + 0.05);
+  if (height < legLength + MIN_TABLETOP_RISE) {
+    height = clampHeight(legLength + MIN_TABLETOP_RISE);
+  }
+
+  if (height > legLength + MAX_TABLETOP_RISE) {
+    height = clampHeight(legLength + MAX_TABLETOP_RISE);
   }
 
   return {
@@ -355,6 +429,14 @@ export function normalizeConfig(config) {
     legLength,
     legWidth,
     legDepth,
+    frameInset,
+    frameThickness,
+    legSpread,
+    legTopDepth,
+    legBottomDepth: Math.min(legTopDepth, legBottomDepth),
+    legBellyDepth,
+    legToeWidth: Math.min(legWidth, legToeWidth),
+    legToeSharpness,
     legCount: clampLegCount(config?.legCount ?? DEFAULT_CONFIG.legCount)
   };
 }
@@ -403,7 +485,15 @@ export function getShapeProfile(rawConfig) {
       patternRelief: config.patternRelief,
       finishColor: config.finishColor,
       legWidth: config.legWidth,
-      legDepth: config.legDepth
+      legDepth: config.legDepth,
+      frameInset: config.frameInset,
+      frameThickness: config.frameThickness,
+      legSpread: config.legSpread,
+      legTopDepth: config.legTopDepth,
+      legBottomDepth: config.legBottomDepth,
+      legBellyDepth: config.legBellyDepth,
+      legToeWidth: config.legToeWidth,
+      legToeSharpness: config.legToeSharpness
     };
   }
 
@@ -428,7 +518,15 @@ export function getShapeProfile(rawConfig) {
       patternRelief: config.patternRelief,
       finishColor: config.finishColor,
       legWidth: config.legWidth,
-      legDepth: config.legDepth
+      legDepth: config.legDepth,
+      frameInset: config.frameInset,
+      frameThickness: config.frameThickness,
+      legSpread: config.legSpread,
+      legTopDepth: config.legTopDepth,
+      legBottomDepth: config.legBottomDepth,
+      legBellyDepth: config.legBellyDepth,
+      legToeWidth: config.legToeWidth,
+      legToeSharpness: config.legToeSharpness
     };
   }
 
@@ -452,6 +550,14 @@ export function getShapeProfile(rawConfig) {
     patternRelief: config.patternRelief,
     finishColor: config.finishColor,
     legWidth: config.legWidth,
-    legDepth: config.legDepth
+    legDepth: config.legDepth,
+    frameInset: config.frameInset,
+    frameThickness: config.frameThickness,
+    legSpread: config.legSpread,
+    legTopDepth: config.legTopDepth,
+    legBottomDepth: config.legBottomDepth,
+    legBellyDepth: config.legBellyDepth,
+    legToeWidth: config.legToeWidth,
+    legToeSharpness: config.legToeSharpness
   };
 }

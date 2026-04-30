@@ -15,12 +15,13 @@ import {
   mapSketchHullToOutline
 } from "../lib/triangleModules";
 import {
-  TEACHER_FRAMEWORK_BASE,
   createTeacherBoardGeometry,
   createTeacherFrameGeometry,
   createTeacherLegGeometry,
   getTeacherFrameworkMetrics,
-  getTeacherLegAnchors
+  getTeacherLegAnchors,
+  getTeacherModuleOutline,
+  getTeacherSurfaceInset
 } from "../lib/teacherFramework";
 
 const INTRO_CAMERA = { x: -1.9, y: 2.55, z: 7.6 };
@@ -140,8 +141,12 @@ function getSketchLegAnchors(metrics, profile, outlinePoints) {
   }
 
   const centroid = getOutlineCentroid(outlinePoints);
-  const inset = Math.max(profile.moduleSize * 0.68, profile.legWidth * 2.1, 0.045);
-  const legTopY = metrics.height - Math.max(0.006, metrics.boardThickness * 0.2);
+  const inset = Math.max(
+    0.028,
+    Math.max(profile.moduleSize * 0.56, profile.legWidth * 1.72, 0.04) -
+      Math.max(0, profile.legSpread || 0) * 0.6
+  );
+  const legTopY = metrics.legTopY;
   const count = Math.max(3, Math.min(profile.legCount, 8));
   const startAngle = profile.legCount === 4 ? Math.PI / 4 : -Math.PI / 2;
 
@@ -173,6 +178,18 @@ function getSuperellipsePoint(radiusX, radiusZ, exponent, angle) {
     x: Math.sign(cos) * radiusX * Math.pow(Math.abs(cos), 2 / exponent),
     z: Math.sign(sin) * radiusZ * Math.pow(Math.abs(sin), 2 / exponent)
   };
+}
+
+function getOutlineSignature(outlinePoints) {
+  if (!Array.isArray(outlinePoints) || outlinePoints.length < 3) {
+    return "base";
+  }
+
+  const step = Math.max(1, Math.floor(outlinePoints.length / 18));
+  return outlinePoints
+    .filter((_, index) => index % step === 0)
+    .map((point) => `${point.x.toFixed(2)},${point.z.toFixed(2)}`)
+    .join(";");
 }
 
 function getLegAnchors(profile) {
@@ -312,25 +329,43 @@ function buildSeamGeometry(cells, seamY) {
   return geometry;
 }
 
-function applyModuleMaterial(material, values, patternMode, highlighted = false) {
-  material.color.set("#ffffff");
+function applyModuleMaterial(
+  material,
+  values,
+  patternMode,
+  highlighted = false,
+  tintActive = false,
+  baseColor = "#ffffff",
+  useVertexColors = false
+) {
+  material.vertexColors = useVertexColors;
+  material.color.set(useVertexColors ? "#ffffff" : baseColor);
   material.map = null;
   material.roughness =
-    patternMode === "metal"
+    tintActive
+      ? Math.max(0.46, values.roughness * 0.94)
+      : patternMode === "metal"
       ? Math.max(0.22, values.roughness * 0.78)
       : Math.max(0.28, values.roughness * 0.92);
   material.metalness =
-    patternMode === "metal"
+    tintActive
+      ? Math.min(0.14, values.metalness * 0.14)
+      : patternMode === "metal"
       ? Math.max(0.18, values.metalness * 0.52)
       : Math.max(0.02, values.metalness * 0.18);
   material.clearcoat =
-    patternMode === "metal"
+    tintActive
+      ? Math.max(0.06, values.clearcoat * 0.7)
+      : patternMode === "metal"
       ? Math.max(0.16, values.clearcoat + 0.12)
       : Math.max(0.08, values.clearcoat + 0.06);
   material.reflectivity =
-    patternMode === "metal"
+    tintActive
+      ? Math.max(0.12, values.reflectivity * 0.36)
+      : patternMode === "metal"
       ? Math.max(0.26, values.reflectivity * 0.82)
       : Math.max(0.16, values.reflectivity * 0.72);
+  material.envMapIntensity = tintActive ? 0.34 : patternMode === "metal" ? 0.82 : 0.64;
   material.transmission = 0;
   material.transparent = false;
   material.opacity = 1;
@@ -524,7 +559,7 @@ function getModuleColor(profile, cell, patternInfo, partStyle = null) {
   const baseHex =
     profile.material === "metal"
       ? "#a7adb2"
-      : blendHex(MATERIAL_PRESETS[profile.material].topColor, "#c3c7cb", 0.58);
+      : blendHex(MATERIAL_PRESETS[profile.material].topColor, "#fff7ea", 0.18);
 
   return new THREE.Color(profile.finishColor || baseHex);
 }
@@ -727,7 +762,8 @@ const TableViewport = forwardRef(function TableViewport({
       geometry: null,
       meshes: [],
       shape: "",
-      count: 0
+      count: 0,
+      signature: ""
     };
     const frameworkGroup = new THREE.Group();
     tableGroup.add(frameworkGroup);
@@ -735,7 +771,9 @@ const TableViewport = forwardRef(function TableViewport({
       board: null,
       frame: null,
       boardGeometry: null,
-      frameGeometry: null
+      frameGeometry: null,
+      boardSignature: "",
+      frameSignature: ""
     };
 
     const ground = new THREE.Mesh(
@@ -807,7 +845,7 @@ const TableViewport = forwardRef(function TableViewport({
       }
     }
 
-    function rebuildLegMeshes(profile) {
+    function rebuildLegMeshes(profile, metrics) {
       if (legState.geometry) {
         legState.geometry.dispose();
       }
@@ -817,7 +855,7 @@ const TableViewport = forwardRef(function TableViewport({
         legGroup.remove(mesh);
       });
 
-      legState.geometry = createTeacherLegGeometry();
+      legState.geometry = createTeacherLegGeometry(metrics);
       legState.meshes = Array.from({ length: profile.legCount }, (_, index) => {
         const leg = new THREE.Mesh(legState.geometry, new THREE.MeshPhysicalMaterial());
         leg.castShadow = true;
@@ -828,37 +866,117 @@ const TableViewport = forwardRef(function TableViewport({
       });
       legState.shape = "teacher-framework";
       legState.count = profile.legCount;
+      legState.signature = [
+        metrics.legTopY,
+        metrics.legWidth,
+        metrics.legUpperDepth,
+        metrics.legLowerDepth,
+        metrics.legBellyDepth,
+        metrics.footWidth,
+        metrics.legToeSharpness
+      ]
+        .map((value) => Number(value).toFixed(3))
+        .join("|");
     }
 
-    function ensureLegMeshes(profile) {
-      if (!legState.geometry || legState.shape !== "teacher-framework" || legState.count !== profile.legCount) {
-        rebuildLegMeshes(profile);
+    function ensureLegMeshes(profile, metrics) {
+      const signature = [
+        metrics.legTopY,
+        metrics.legWidth,
+        metrics.legUpperDepth,
+        metrics.legLowerDepth,
+        metrics.legBellyDepth,
+        metrics.footWidth,
+        metrics.legToeSharpness
+      ]
+        .map((value) => Number(value).toFixed(3))
+        .join("|");
+
+      if (
+        !legState.geometry ||
+        legState.shape !== "teacher-framework" ||
+        legState.count !== profile.legCount ||
+        legState.signature !== signature
+      ) {
+        rebuildLegMeshes(profile, metrics);
+      }
+    }
+
+    function syncTeacherFrameworkGeometry(metrics, outlinePoints) {
+      ensureTeacherMeshes();
+      const outlineSignature = getOutlineSignature(outlinePoints);
+      const boardSignature = [
+        metrics.width,
+        metrics.depth,
+        metrics.boardThickness,
+        outlineSignature
+      ]
+        .map((value) => (typeof value === "number" ? value.toFixed(3) : value))
+        .join("|");
+      const frameSignature = [
+        metrics.frameOuterWidth,
+        metrics.frameOuterDepth,
+        metrics.frameThickness,
+        metrics.frameDrop,
+        outlineSignature
+      ]
+        .map((value) => (typeof value === "number" ? value.toFixed(3) : value))
+        .join("|");
+
+      if (teacherState.boardSignature !== boardSignature) {
+        const nextGeometry = createTeacherBoardGeometry(metrics, outlinePoints);
+        const previousGeometry = teacherState.boardGeometry;
+        teacherState.boardGeometry = nextGeometry;
+        teacherState.board.geometry = nextGeometry;
+        teacherState.boardSignature = boardSignature;
+        if (previousGeometry) {
+          previousGeometry.dispose();
+        }
+      }
+
+      if (teacherState.frameSignature !== frameSignature) {
+        const nextGeometry = createTeacherFrameGeometry(metrics, outlinePoints);
+        const previousGeometry = teacherState.frameGeometry;
+        teacherState.frameGeometry = nextGeometry;
+        teacherState.frame.geometry = nextGeometry;
+        teacherState.frameSignature = frameSignature;
+        if (previousGeometry) {
+          previousGeometry.dispose();
+        }
       }
     }
 
     function rebuildModuleMesh(profile) {
       const metrics = getTeacherFrameworkMetrics(profile);
-      const tabletopStyle = resolvePartOverride(
+      const moduleStyle = resolvePartOverride(
         sceneRef.current?.partOverrides,
-        "tabletop",
+        "modules",
         DEFAULT_PART_MATERIALS.tabletop
       );
       const outlinePoints =
         profile.silhouetteMode === "sketch"
           ? mapSketchHullToOutline(profile, moduleState.sketchOutline)
           : [];
-      const useSketchSilhouette =
-        profile.silhouetteMode === "sketch" && outlinePoints.length >= 3;
+      const insetOutlinePoints = getTeacherModuleOutline(metrics, outlinePoints);
+      const useModuleOutline = insetOutlinePoints.length >= 3;
       const applyLocalMaskEdit =
         profile.silhouetteMode !== "sketch" && Boolean(moduleState.maskInfo);
+      const useInstanceColors =
+        profile.patternMode === "uploaded" && Boolean(moduleState.patternInfo);
+      const surfaceInset = getTeacherSurfaceInset(metrics);
+      const moduleBaseColor = getPatternBaseColor(profile, moduleStyle);
       const effectiveProfile = {
         ...profile,
-        moduleSize: profile.moduleSize * tabletopStyle.moduleSizeScale,
+        width: Math.max(0.12, profile.width - surfaceInset * 2),
+        depth: Math.max(0.12, profile.depth - surfaceInset * 2),
+        radiusX: Math.max(0.06, profile.radiusX - surfaceInset),
+        radiusZ: Math.max(0.06, profile.radiusZ - surfaceInset),
+        moduleSize: profile.moduleSize * moduleStyle.moduleSizeScale,
         moduleThicknessScale:
-          profile.moduleThicknessScale * tabletopStyle.thicknessScale
+          profile.moduleThicknessScale * moduleStyle.thicknessScale
       };
       const cells = generateTriangleCells(effectiveProfile, {
-        outlinePoints: useSketchSilhouette ? outlinePoints : [],
+        outlinePoints: useModuleOutline ? insetOutlinePoints : [],
         useSketchMask: false,
         localMaskMode: applyLocalMaskEdit,
         maskSampler: moduleState.maskInfo
@@ -882,7 +1000,7 @@ const TableViewport = forwardRef(function TableViewport({
       );
       mesh.castShadow = true;
       mesh.receiveShadow = true;
-      mesh.userData.partId = "tabletop";
+      mesh.userData.partId = "modules";
       const tileEdge = Math.max(
         0.02,
         effectiveProfile.moduleSize * 1.08 - profile.moduleGap * 0.02
@@ -900,14 +1018,14 @@ const TableViewport = forwardRef(function TableViewport({
         profile.patternMode === "uploaded"
           ? baseModuleThickness * (0.03 + reliefStrength * 0.06)
           : 0;
-      const moduleBaseY = metrics.height - baseModuleThickness * 0.86;
+      const moduleTopY = metrics.height - Math.min(0.0015, metrics.boardThickness * 0.06);
 
       cells.forEach((cell, index) => {
         const drift =
           profile.patternMode === "uploaded"
             ? createColorDrift(cell.x * 1.4, cell.z * 0.9)
             : 0.5;
-        const patternBaseColor = getPatternBaseColor(profile, tabletopStyle);
+        const patternBaseColor = getPatternBaseColor(profile, moduleStyle);
         const patternStrength =
           profile.patternMode === "uploaded" && moduleState.patternInfo
             ? sampleImageIntensity(
@@ -933,7 +1051,7 @@ const TableViewport = forwardRef(function TableViewport({
         );
         moduleState.dummy.position.set(
           cell.x,
-          moduleBaseY + moduleThickness / 2 + lift,
+          moduleTopY - moduleThickness / 2 + lift * 0.55,
           cell.z
         );
         moduleState.dummy.rotation.set(0, cell.rotation, 0);
@@ -944,23 +1062,28 @@ const TableViewport = forwardRef(function TableViewport({
         );
         moduleState.dummy.updateMatrix();
         mesh.setMatrixAt(index, moduleState.dummy.matrix);
-        mesh.setColorAt(
-          index,
-          getModuleColor(profile, cell, moduleState.patternInfo, tabletopStyle)
-        );
+        if (useInstanceColors) {
+          mesh.setColorAt(
+            index,
+            getModuleColor(profile, cell, moduleState.patternInfo, moduleStyle)
+          );
+        }
       });
 
       mesh.count = cells.length;
       mesh.instanceMatrix.needsUpdate = true;
-      if (mesh.instanceColor) {
+      if (useInstanceColors && mesh.instanceColor) {
         mesh.instanceColor.needsUpdate = true;
       }
 
       applyModuleMaterial(
         moduleMaterial,
-        getEcoMaterial(tabletopStyle.materialKey),
+        getEcoMaterial(moduleStyle.materialKey),
         profile.patternMode,
-        (sceneRef.current?.selectedPartId || "") === "tabletop"
+        (sceneRef.current?.selectedPartId || "") === "modules",
+        Boolean(moduleStyle.tint || profile.finishColor),
+        `#${moduleBaseColor.getHexString()}`,
+        useInstanceColors
       );
       tableGroup.add(mesh);
       moduleState.mesh = mesh;
@@ -979,32 +1102,33 @@ const TableViewport = forwardRef(function TableViewport({
           : [];
       const sketchSilhouetteActive = sketchOutlinePoints.length >= 3;
 
-      ensureTeacherMeshes();
-      ensureLegMeshes(profile);
+      syncTeacherFrameworkGeometry(
+        metrics,
+        sketchSilhouetteActive ? sketchOutlinePoints : []
+      );
+      ensureLegMeshes(profile, metrics);
       rebuildModuleMesh(profile);
 
+      const tabletopWidthScale = THREE.MathUtils.clamp(tabletopStyle.widthScale, 0.55, 1.8);
+      const tabletopDepthScale = THREE.MathUtils.clamp(tabletopStyle.depthScale, 0.55, 1.8);
       teacherState.board.scale.set(
-        (metrics.width / TEACHER_FRAMEWORK_BASE.width) *
-          THREE.MathUtils.clamp(tabletopStyle.widthScale, 0.55, 1.8),
-        metrics.boardThickness / TEACHER_FRAMEWORK_BASE.boardThickness,
-        (metrics.depth / TEACHER_FRAMEWORK_BASE.depth) *
-          THREE.MathUtils.clamp(tabletopStyle.depthScale, 0.55, 1.8)
+        tabletopWidthScale,
+        1,
+        tabletopDepthScale
       );
       teacherState.board.position.set(0, metrics.height - metrics.boardThickness / 2, 0);
-      teacherState.board.visible = !sketchSilhouetteActive;
+      teacherState.board.visible = true;
       teacherState.frame.scale.set(
-        (metrics.frameOuterWidth / TEACHER_FRAMEWORK_BASE.frameOuterWidth) *
-          THREE.MathUtils.clamp(tabletopStyle.widthScale, 0.55, 1.8),
-        metrics.frameDrop / TEACHER_FRAMEWORK_BASE.frameDrop,
-        (metrics.frameOuterDepth / TEACHER_FRAMEWORK_BASE.frameOuterDepth) *
-          THREE.MathUtils.clamp(tabletopStyle.depthScale, 0.55, 1.8)
+        tabletopWidthScale,
+        1,
+        tabletopDepthScale
       );
       teacherState.frame.position.set(
         0,
         metrics.height - metrics.boardThickness - metrics.frameDrop / 2,
         0
       );
-      teacherState.frame.visible = !sketchSilhouetteActive;
+      teacherState.frame.visible = true;
       applyEcoFinish(
         teacherState.board.material,
         tabletopStyle.materialKey,
@@ -1041,9 +1165,9 @@ const TableViewport = forwardRef(function TableViewport({
         leg.position.copy(anchor.position);
         leg.rotation.set(0, anchor.rotationY, 0);
         leg.scale.set(
-          (metrics.legWidth / TEACHER_FRAMEWORK_BASE.legWidth) * widthScale,
-          (anchor.position.y / TEACHER_FRAMEWORK_BASE.legTopY) * lengthScale,
-          (metrics.legUpperDepth / TEACHER_FRAMEWORK_BASE.legUpperDepth) * depthScale
+          widthScale,
+          lengthScale,
+          depthScale
         );
         applyEcoFinish(
           leg.material,
@@ -1245,7 +1369,7 @@ const TableViewport = forwardRef(function TableViewport({
       const partStyle = resolvePartOverride(
         sceneRef.current?.partOverrides,
         partId,
-        partId === "tabletop"
+        partId === "tabletop" || partId === "modules"
           ? DEFAULT_PART_MATERIALS.tabletop
           : DEFAULT_PART_MATERIALS.legs
       );
@@ -1254,10 +1378,12 @@ const TableViewport = forwardRef(function TableViewport({
 
       onSelectPart({
         id: partId,
-        kind: partId === "tabletop" ? "tabletop" : "leg",
+        kind: partId === "tabletop" || partId === "modules" ? partId : "leg",
         label:
           partId === "tabletop"
             ? `${materialLabel} Tabletop`
+            : partId === "modules"
+              ? `${materialLabel} Modules`
             : `${materialLabel} Leg ${legNumber}`,
         anchor: {
           x: event.clientX - rect.left,
@@ -1401,22 +1527,7 @@ const TableViewport = forwardRef(function TableViewport({
 
     const profile = getShapeProfile(config);
     state.phase = phase;
-    state.shapeState.shape = profile.shape;
-    state.shapeState.material = profile.material;
-    state.shapeState.finishColor = profile.finishColor;
-    state.shapeState.scenario = profile.scenario;
-    state.shapeState.legShape = profile.legShape;
-    state.shapeState.legCount = profile.legCount;
-    state.shapeState.legLength = profile.legLength;
-    state.shapeState.legWidth = profile.legWidth;
-    state.shapeState.legDepth = profile.legDepth;
-    state.shapeState.patternMode = profile.patternMode;
-    state.shapeState.silhouetteMode = profile.silhouetteMode;
-    state.shapeState.moduleThicknessScale = profile.moduleThicknessScale;
-    state.shapeState.patternPresence = profile.patternPresence;
-    state.shapeState.patternContrast = profile.patternContrast;
-    state.shapeState.patternBrightness = profile.patternBrightness;
-    state.shapeState.patternRelief = profile.patternRelief;
+    Object.assign(state.shapeState, profile);
 
     const pose = getCameraPose(state.camera, profile, phase);
     state.controls.minDistance = pose.minDistance;
@@ -1441,30 +1552,7 @@ const TableViewport = forwardRef(function TableViewport({
     });
 
     gsap.killTweensOf(state.shapeState);
-    gsap.to(state.shapeState, {
-      duration: 1.05,
-      width: profile.width,
-      depth: profile.depth,
-      radiusX: profile.radiusX,
-      radiusZ: profile.radiusZ,
-      exponent: profile.exponent,
-      thickness: profile.thickness,
-      topY: profile.topY,
-      legLength: profile.legLength,
-      legWidth: profile.legWidth,
-      legDepth: profile.legDepth,
-      moduleSize: profile.moduleSize,
-      moduleGap: profile.moduleGap,
-      moduleThicknessScale: profile.moduleThicknessScale,
-      patternPresence: profile.patternPresence,
-      patternContrast: profile.patternContrast,
-      patternBrightness: profile.patternBrightness,
-      patternRelief: profile.patternRelief,
-      ease: "power2.out",
-      onUpdate: () => {
-        state.updateTable(state.shapeState);
-      }
-    });
+    state.updateTable(state.shapeState);
 
     state.applyScenario(config.scenario, config.lightAngle);
   }, [config, interactive, phase]);

@@ -32,6 +32,66 @@ function pointInPolygon(point, polygon) {
   return inside;
 }
 
+function pointInTriangle(point, vertices) {
+  const [a, b, c] = vertices;
+  const denominator =
+    (b.z - c.z) * (a.x - c.x) + (c.x - b.x) * (a.z - c.z);
+
+  if (Math.abs(denominator) < Number.EPSILON) {
+    return false;
+  }
+
+  const alpha =
+    ((b.z - c.z) * (point.x - c.x) + (c.x - b.x) * (point.z - c.z)) / denominator;
+  const beta =
+    ((c.z - a.z) * (point.x - c.x) + (a.x - c.x) * (point.z - c.z)) / denominator;
+  const gamma = 1 - alpha - beta;
+
+  return alpha >= -0.0001 && beta >= -0.0001 && gamma >= -0.0001;
+}
+
+function orientation2d(a, b, c) {
+  return (b.x - a.x) * (c.z - a.z) - (b.z - a.z) * (c.x - a.x);
+}
+
+function onSegment2d(a, b, p) {
+  return (
+    p.x >= Math.min(a.x, b.x) - 0.0001 &&
+    p.x <= Math.max(a.x, b.x) + 0.0001 &&
+    p.z >= Math.min(a.z, b.z) - 0.0001 &&
+    p.z <= Math.max(a.z, b.z) + 0.0001
+  );
+}
+
+function segmentsIntersect2d(a, b, c, d) {
+  const o1 = orientation2d(a, b, c);
+  const o2 = orientation2d(a, b, d);
+  const o3 = orientation2d(c, d, a);
+  const o4 = orientation2d(c, d, b);
+
+  if (
+    ((o1 > 0 && o2 < 0) || (o1 < 0 && o2 > 0)) &&
+    ((o3 > 0 && o4 < 0) || (o3 < 0 && o4 > 0))
+  ) {
+    return true;
+  }
+
+  if (Math.abs(o1) < 0.0001 && onSegment2d(a, b, c)) {
+    return true;
+  }
+  if (Math.abs(o2) < 0.0001 && onSegment2d(a, b, d)) {
+    return true;
+  }
+  if (Math.abs(o3) < 0.0001 && onSegment2d(c, d, a)) {
+    return true;
+  }
+  if (Math.abs(o4) < 0.0001 && onSegment2d(c, d, b)) {
+    return true;
+  }
+
+  return false;
+}
+
 function distancePointToSegment(point, start, end) {
   const dx = end.x - start.x;
   const dz = end.z - start.z;
@@ -83,6 +143,33 @@ function isTriangleInsideShape(triangle, outline) {
   ).length;
 
   return insideVertices >= 2;
+}
+
+function triangleOverlapsShape(triangle, outline) {
+  if (isTriangleInsideShape(triangle, outline)) {
+    return true;
+  }
+
+  if (outline.some((point) => pointInTriangle(point, triangle.vertices))) {
+    return true;
+  }
+
+  const triangleEdges = [
+    [triangle.vertices[0], triangle.vertices[1]],
+    [triangle.vertices[1], triangle.vertices[2]],
+    [triangle.vertices[2], triangle.vertices[0]]
+  ];
+
+  for (let index = 0; index < outline.length; index += 1) {
+    const start = outline[index];
+    const end = outline[(index + 1) % outline.length];
+
+    if (triangleEdges.some(([a, b]) => segmentsIntersect2d(a, b, start, end))) {
+      return true;
+    }
+  }
+
+  return false;
 }
 
 function getTriangleApex(vertices) {
@@ -137,14 +224,62 @@ export function buildShapeOutline(profile, segments = 72) {
   });
 }
 
+function dedupeHullPoints(points) {
+  return points.filter((point, index) => {
+    const previous = points[(index - 1 + points.length) % points.length];
+    return !previous || Math.hypot(point.x - previous.x, point.y - previous.y) > 0.0025;
+  });
+}
+
+function smoothClosedHull(points, iterations = 1) {
+  let result = [...points];
+
+  for (let pass = 0; pass < iterations; pass += 1) {
+    if (result.length < 3) {
+      return result;
+    }
+
+    result = result.map((point, index) => {
+      const previous = result[(index - 1 + result.length) % result.length];
+      const next = result[(index + 1) % result.length];
+
+      return {
+        x: point.x * 0.72 + (previous.x + next.x) * 0.14,
+        y: point.y * 0.72 + (previous.y + next.y) * 0.14
+      };
+    });
+  }
+
+  return result;
+}
+
 export function mapSketchHullToOutline(profile, hullPoints = []) {
   if (!Array.isArray(hullPoints) || hullPoints.length < 3) {
     return [];
   }
 
-  return hullPoints.map((point) => ({
-    x: (point.x - 0.5) * profile.width,
-    z: (0.5 - point.y) * profile.depth
+  const cleanedHull = dedupeHullPoints(
+    hullPoints.map((point) => ({
+      x: Number(point.x) || 0,
+      y: Number(point.y) || 0
+    }))
+  );
+  const smoothedHull = smoothClosedHull(cleanedHull.length >= 3 ? cleanedHull : hullPoints);
+  const xs = smoothedHull.map((point) => point.x);
+  const ys = smoothedHull.map((point) => point.y);
+  const minX = Math.min(...xs);
+  const maxX = Math.max(...xs);
+  const minY = Math.min(...ys);
+  const maxY = Math.max(...ys);
+  const width = Math.max(0.08, maxX - minX);
+  const height = Math.max(0.08, maxY - minY);
+  const centerX = (minX + maxX) / 2;
+  const centerY = (minY + maxY) / 2;
+  const fit = 0.985;
+
+  return smoothedHull.map((point) => ({
+    x: ((point.x - centerX) / width) * profile.width * fit,
+    z: ((centerY - point.y) / height) * profile.depth * fit
   }));
 }
 
@@ -199,7 +334,7 @@ export function generateTriangleCells(
         const sampleValue = maskSampler
           ? maskSampler(triangle.u, triangle.v)
           : 0;
-        const baseInside = isTriangleInsideShape(triangle, shapeOutline);
+        const baseInside = triangleOverlapsShape(triangle, shapeOutline);
         const edgeDistance = distanceToPolygonEdge(triangle.centroid, shapeOutline);
         let include = baseInside;
 

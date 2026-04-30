@@ -1,12 +1,12 @@
-import { useEffect, useRef, useState } from "react";
+﻿import { useEffect, useRef, useState } from "react";
 
 const BACKGROUND = "#f3efe8";
 const INK_SWATCHES = [
-  { label: "Light Wood", color: "#d6a678" },
-  { label: "Dark Walnut", color: "#5f4030" },
-  { label: "Stone", color: "#98928d" },
-  { label: "Metal", color: "#8d9399" },
-  { label: "Accent", color: "#d9381e" }
+  { labelEn: "Light Wood", labelZh: "浅木", color: "#d6a678" },
+  { labelEn: "Dark Walnut", labelZh: "胡桃木", color: "#5f4030" },
+  { labelEn: "Stone", labelZh: "石材", color: "#98928d" },
+  { labelEn: "Metal", labelZh: "金属", color: "#8d9399" },
+  { labelEn: "Accent", labelZh: "强调色", color: "#d9381e" }
 ];
 
 function drawStroke(context, stroke) {
@@ -94,6 +94,197 @@ function convexHull(points) {
   lower.pop();
   upper.pop();
   return lower.concat(upper);
+}
+
+function measurePathLength(points, closed = false) {
+  if (points.length < 2) {
+    return 0;
+  }
+
+  let total = 0;
+
+  for (let index = 1; index < points.length; index += 1) {
+    const previous = points[index - 1];
+    const current = points[index];
+    total += Math.hypot(current.x - previous.x, current.y - previous.y);
+  }
+
+  if (closed) {
+    const first = points[0];
+    const last = points[points.length - 1];
+    total += Math.hypot(first.x - last.x, first.y - last.y);
+  }
+
+  return total;
+}
+
+function getBounds(points) {
+  let minX = Number.POSITIVE_INFINITY;
+  let minY = Number.POSITIVE_INFINITY;
+  let maxX = Number.NEGATIVE_INFINITY;
+  let maxY = Number.NEGATIVE_INFINITY;
+
+  points.forEach((point) => {
+    minX = Math.min(minX, point.x);
+    minY = Math.min(minY, point.y);
+    maxX = Math.max(maxX, point.x);
+    maxY = Math.max(maxY, point.y);
+  });
+
+  return {
+    minX,
+    minY,
+    maxX,
+    maxY,
+    width: Math.max(1, maxX - minX),
+    height: Math.max(1, maxY - minY)
+  };
+}
+
+function isClosedStroke(points) {
+  if (points.length < 6) {
+    return false;
+  }
+
+  const { width, height } = getBounds(points);
+  const span = Math.max(width, height, 1);
+  const gap = Math.hypot(
+    points[points.length - 1].x - points[0].x,
+    points[points.length - 1].y - points[0].y
+  );
+  const length = measurePathLength(points);
+
+  return length > span * 2.1 && gap <= Math.max(14, span * 0.18);
+}
+
+function simplifyStrokePath(points, minimumGap = 3.5) {
+  if (points.length <= 2) {
+    return points.map((point) => ({ x: point.x, y: point.y }));
+  }
+
+  const simplified = [{ x: points[0].x, y: points[0].y }];
+  let lastKept = points[0];
+
+  for (let index = 1; index < points.length - 1; index += 1) {
+    const point = points[index];
+    if (Math.hypot(point.x - lastKept.x, point.y - lastKept.y) >= minimumGap) {
+      simplified.push({ x: point.x, y: point.y });
+      lastKept = point;
+    }
+  }
+
+  const lastPoint = points[points.length - 1];
+  if (Math.hypot(lastPoint.x - lastKept.x, lastPoint.y - lastKept.y) >= 1.5) {
+    simplified.push({ x: lastPoint.x, y: lastPoint.y });
+  } else {
+    simplified[simplified.length - 1] = { x: lastPoint.x, y: lastPoint.y };
+  }
+
+  return simplified;
+}
+
+function resampleClosedPath(points, targetCount = 72) {
+  if (points.length < 3) {
+    return points.map((point) => ({ x: point.x, y: point.y }));
+  }
+
+  const segmentLengths = [];
+  let perimeter = 0;
+
+  for (let index = 0; index < points.length; index += 1) {
+    const current = points[index];
+    const next = points[(index + 1) % points.length];
+    const length = Math.hypot(next.x - current.x, next.y - current.y);
+    segmentLengths.push(length);
+    perimeter += length;
+  }
+
+  if (!perimeter) {
+    return points.map((point) => ({ x: point.x, y: point.y }));
+  }
+
+  const sampled = [];
+  let segmentIndex = 0;
+  let segmentStart = points[0];
+  let segmentEnd = points[1 % points.length];
+  let distanceIntoSegment = 0;
+  let traversed = 0;
+
+  for (let sampleIndex = 0; sampleIndex < targetCount; sampleIndex += 1) {
+    const targetDistance = (sampleIndex / targetCount) * perimeter;
+
+    while (
+      segmentIndex < segmentLengths.length - 1 &&
+      traversed + segmentLengths[segmentIndex] < targetDistance
+    ) {
+      traversed += segmentLengths[segmentIndex];
+      segmentIndex += 1;
+      segmentStart = points[segmentIndex];
+      segmentEnd = points[(segmentIndex + 1) % points.length];
+      distanceIntoSegment = 0;
+    }
+
+    const segmentLength = Math.max(0.0001, segmentLengths[segmentIndex]);
+    distanceIntoSegment = targetDistance - traversed;
+    const t = Math.max(0, Math.min(1, distanceIntoSegment / segmentLength));
+
+    sampled.push({
+      x: segmentStart.x + (segmentEnd.x - segmentStart.x) * t,
+      y: segmentStart.y + (segmentEnd.y - segmentStart.y) * t
+    });
+  }
+
+  return sampled;
+}
+
+function smoothClosedPath(points, passes = 1) {
+  let result = points.map((point) => ({ x: point.x, y: point.y }));
+
+  for (let pass = 0; pass < passes; pass += 1) {
+    if (result.length < 3) {
+      return result;
+    }
+
+    result = result.map((point, index) => {
+      const previous = result[(index - 1 + result.length) % result.length];
+      const next = result[(index + 1) % result.length];
+
+      return {
+        x: point.x * 0.7 + (previous.x + next.x) * 0.15,
+        y: point.y * 0.7 + (previous.y + next.y) * 0.15
+      };
+    });
+  }
+
+  return result;
+}
+
+function deriveStrokeOutline(strokes) {
+  const candidates = strokes
+    .map((stroke) => {
+      const points = simplifyStrokePath(
+        stroke.points || [],
+        Math.max(2.8, Number(stroke.size || 10) * 0.32)
+      );
+
+      return {
+        points,
+        closed: isClosedStroke(points),
+        length: measurePathLength(points)
+      };
+    })
+    .filter((candidate) => candidate.points.length >= 6);
+
+  const preferred = [...candidates]
+    .filter((candidate) => candidate.closed)
+    .sort((a, b) => b.length - a.length)[0];
+
+  if (!preferred) {
+    return [];
+  }
+
+  const targetCount = Math.max(36, Math.min(120, Math.round(preferred.length / 12)));
+  return smoothClosedPath(resampleClosedPath(preferred.points, targetCount), 1);
 }
 
 function polygonArea(points) {
@@ -276,8 +467,10 @@ function summarizeStrokes(strokes, width, height) {
   const dominantColor = [...colorWeights.entries()].sort((a, b) => b[1] - a[1])[0]?.[0]
     || "#1a1a1a";
   const hull = convexHull(sampledPoints);
-  const hullArea = polygonArea(hull);
-  const hullPerimeter = polygonPerimeter(hull);
+  const strokeOutline = deriveStrokeOutline(strokes);
+  const analysisOutline = strokeOutline.length >= 3 ? strokeOutline : hull;
+  const hullArea = polygonArea(analysisOutline);
+  const hullPerimeter = polygonPerimeter(analysisOutline);
   const bboxArea = Math.max(1, bboxWidth * bboxHeight);
   const circularity =
     hullPerimeter > 0 ? (4 * Math.PI * hullArea) / (hullPerimeter * hullPerimeter) : 0;
@@ -298,15 +491,15 @@ function summarizeStrokes(strokes, width, height) {
     strokeEnergy,
     circularity,
     rectangularity: Math.min(1, hullArea / bboxArea),
-    elongation: computeElongation(sampledPoints),
-    radialVariance: computeRadialVariance(hull),
-    hullNormalized: hull.map((point) => ({
+    elongation: computeElongation(analysisOutline.length >= 3 ? analysisOutline : sampledPoints),
+    radialVariance: computeRadialVariance(analysisOutline),
+    hullNormalized: analysisOutline.map((point) => ({
       x: point.x / Math.max(1, width),
       y: point.y / Math.max(1, height)
     })),
     boundsWidthRatio: Math.min(1, bboxWidth / Math.max(1, width)),
     boundsHeightRatio: Math.min(1, bboxHeight / Math.max(1, height)),
-    hullPointCount: hull.length,
+    hullPointCount: analysisOutline.length,
     bounds: {
       x: minX,
       y: minY,
@@ -508,11 +701,11 @@ export default function SketchPad({
           <h2 className="sketchpad__title">
             {locale === "zh"
               ? floating
-                ? "在这里重塑桌子。"
-                : "沿着半透明模型画出新轮廓。"
+                ? "在这里重塑桌面。"
+                : "沿半透明参考继续描出新轮廓。"
               : floating
                 ? "Draw here to reshape the table."
-                : "Draw over the translucent table."}
+                : "Draw over the translucent reference."}
           </h2>
         </div>
         <button className="ghost-button" onClick={clearCanvas} type="button">
@@ -522,8 +715,8 @@ export default function SketchPad({
 
       <p className="sketchpad__lead">
         {locale === "zh"
-          ? "画笔不是替代老师的模型，而是在老师模型的模块化复刻上做局部推拉、收边和比例修正。"
-          : "The pen edits a modular replica of the teacher model, so sketching reshapes edges, proportion, and module density."}
+          ? "笔触会在当前桌面基础上做局部推拉、收边与比例修正。"
+          : "Sketch strokes refine the current tabletop through local edge, proportion, and module adjustments."}
       </p>
 
       <div className="sketchpad__surface">
@@ -541,8 +734,8 @@ export default function SketchPad({
         <div className="sketchpad__swatches">
           {INK_SWATCHES.map((swatch) => (
             <button
-              key={swatch.label}
-              aria-label={swatch.label}
+              key={swatch.color}
+              aria-label={locale === "zh" ? swatch.labelZh : swatch.labelEn}
               className={`swatch ${brushColor === swatch.color ? "is-active" : ""}`}
               onClick={() => setBrushColor(swatch.color)}
               style={{ "--swatch-color": swatch.color }}
@@ -571,3 +764,4 @@ export default function SketchPad({
     </section>
   );
 }
+

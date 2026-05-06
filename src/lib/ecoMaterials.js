@@ -110,6 +110,18 @@ export const DEFAULT_PART_MATERIALS = {
   legs: "rpetg_smoke"
 };
 
+export const CATALOG_TO_ECO_MATERIAL = {
+  light_wood: "woodfill_pine",
+  dark_walnut: "corkfill_umber",
+  rough_stone: "allpha_bone",
+  metal: "rpetg_smoke"
+};
+
+export function resolveEcoMaterialKey(key) {
+  return CATALOG_TO_ECO_MATERIAL[key] || key;
+}
+
 export function getEcoMaterial(key) {
-  return ECO_MATERIALS.find((item) => item.value === key) ?? ECO_MATERIALS[0];
+  const resolvedKey = resolveEcoMaterialKey(key);
+  return ECO_MATERIALS.find((item) => item.value === resolvedKey) ?? ECO_MATERIALS[0];
 }

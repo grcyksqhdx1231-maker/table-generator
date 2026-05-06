@@ -18,6 +18,7 @@ export default function VariantViewportGrid({
   onSelectVariant,
   phase,
   patternAsset,
+  surfaceFill,
   sketchMaskDataUrl,
   sketchOutline,
   mainOverlay,
@@ -47,6 +48,7 @@ export default function VariantViewportGrid({
             partOverrides={partOverrides}
             patternAsset={patternAsset}
             phase={phase}
+            surfaceFill={surfaceFill}
             sketchMaskDataUrl={sketchMaskDataUrl}
             sketchOutline={sketchOutline}
             variantLabel={t(locale, "variant.a")}
@@ -74,6 +76,7 @@ export default function VariantViewportGrid({
                 patternAsset={patternAsset}
                 phase={phase}
                 selectedPartId=""
+                surfaceFill={surfaceFill}
                 sketchMaskDataUrl=""
                 sketchOutline={[]}
                 variantLabel={index === 0 ? t(locale, "variant.b") : t(locale, "variant.c")}

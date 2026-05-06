@@ -1,4 +1,7 @@
 ﻿import { useMemo, useState } from "react";
+import BrandLogo from "./BrandLogo";
+import EmptyState from "./EmptyState";
+import Icon from "./Icon";
 import { getLocalizedOptionLabel } from "../lib/i18n";
 import {
   COLOR_FAMILIES,
@@ -13,6 +16,10 @@ function formatMoney(value, locale) {
     currency: "CNY",
     maximumFractionDigits: 0
   }).format(value);
+}
+
+function formatDimensions(config) {
+  return `${Number(config.width || 0).toFixed(2)} x ${Number(config.depth || 0).toFixed(2)} x ${Number(config.height || 0).toFixed(2)} m`;
 }
 
 function getCopy(locale) {
@@ -79,6 +86,7 @@ function GalleryDetailModal({
   item,
   locale,
   isFavorite,
+  isInCart,
   onClose,
   onToggleFavorite,
   onAddToCart
@@ -97,7 +105,7 @@ function GalleryDetailModal({
         }}
       >
         <button className="quote-lightbox__close" onClick={onClose} type="button">
-          ×
+          <Icon name="close" />
         </button>
         <div className="gallery-modal__visual">
           <img
@@ -145,10 +153,16 @@ function GalleryDetailModal({
 
           <div className="panel__actions panel__actions--wrap">
             <button className="ghost-button" onClick={() => onToggleFavorite(item.id)} type="button">
+              <Icon name="favorite" />
               {isFavorite ? copy.removeFavorite : copy.addFavorite}
             </button>
-            <button className="primary-button" onClick={() => onAddToCart(item)} type="button">
-              {copy.addCart}
+            <button
+              className={isInCart ? "outline-button market-card__cart-toggle is-active" : "primary-button"}
+              onClick={() => onAddToCart(item)}
+              type="button"
+            >
+              <Icon name="cart" />
+              {isInCart ? (locale === "zh" ? "移出购物车" : "Remove") : copy.addCart}
             </button>
           </div>
         </div>
@@ -180,6 +194,10 @@ export default function GalleryPage({
     () => galleryItems.filter((item) => (filter === "all" ? true : item.colorFamily === filter)),
     [filter, galleryItems]
   );
+  const cartGalleryIds = useMemo(
+    () => new Set(cart.map((item) => item.galleryItemId)),
+    [cart]
+  );
 
   const activeItem =
     filteredItems.find((item) => item.id === activeItemId) ||
@@ -191,11 +209,26 @@ export default function GalleryPage({
   }
 
   return (
-    <section className="market-page">
+    <section className="market-page market-page--gallery">
       <div className="market-nav">
-        <button className="ghost-button" onClick={onBack} type="button">{copy.back}</button>
-        <button className="ghost-button" onClick={onOpenProfile} type="button">{copy.profile}</button>
-        <button className="ghost-button" onClick={onHome} type="button">{copy.home}</button>
+        <div className="market-nav__brand">
+          <BrandLogo className="brand-lockup--nav" label="Table Generator" compact />
+          <span>{copy.eyebrow}</span>
+        </div>
+        <div className="market-nav__actions">
+          <button className="ghost-button" onClick={onBack} type="button">
+            <Icon name="back" />
+            {copy.back}
+          </button>
+          <button className="ghost-button" onClick={onOpenProfile} type="button">
+            <Icon name="profile" />
+            {copy.profile}
+          </button>
+          <button className="ghost-button" onClick={onHome} type="button">
+            <Icon name="home" />
+            {copy.home}
+          </button>
+        </div>
       </div>
 
       <div className="market-page__body">
@@ -221,9 +254,10 @@ export default function GalleryPage({
           </div>
         </section>
 
-        <section className="market-strip">
+        <section className="market-strip market-strip--filters">
           <div className="panel__actions panel__actions--wrap">
             <button className="primary-button" onClick={onUploadCurrentDesign} type="button">
+              <Icon name="generate" />
               {copy.generateSeries}
             </button>
             {COLOR_FAMILIES.map((family) => (
@@ -239,7 +273,7 @@ export default function GalleryPage({
           </div>
         </section>
 
-        <section className="market-section">
+        <section className="market-section market-section--drafts">
           <div className="panel__section-head">
             <div>
               <p className="panel__label">{copy.sourceDrafts}</p>
@@ -254,6 +288,7 @@ export default function GalleryPage({
                   <strong className="draft-card__title">{draft.label}</strong>
                   <div className="panel__actions">
                     <button className="ghost-button" onClick={() => onUploadDraft(draft)} type="button">
+                      <Icon name="upload" />
                       {copy.publishDraft}
                     </button>
                   </div>
@@ -261,19 +296,26 @@ export default function GalleryPage({
               ))}
             </div>
           ) : (
-            <p className="panel__note">{copy.emptyDrafts}</p>
+            <EmptyState
+              compact
+              detail={copy.emptyDrafts}
+              locale={locale}
+              title={copy.sourceDrafts}
+              variant="drafts"
+            />
           )}
         </section>
 
         <section className="market-gallery-grid">
-          {filteredItems.map((item) => {
+          {filteredItems.length ? filteredItems.map((item) => {
             const estimate = getGalleryEstimate(item.config);
             const favorite = favorites.includes(item.id);
+            const inCart = cartGalleryIds.has(item.id);
             const familyMeta = getColorFamilyMeta(item.colorFamily);
 
             return (
               <article
-                className="market-card"
+                className={`market-card ${favorite ? "is-favorite" : ""} ${inCart ? "is-in-cart" : ""}`}
                 key={item.id}
                 style={{
                   "--family-tint": familyMeta.tint,
@@ -293,11 +335,27 @@ export default function GalleryPage({
                       <p className="panel__label">{item.country} / {item.city}</p>
                       <h3 className="market-card__title">{locale === "zh" ? item.titleZh : item.titleEn}</h3>
                     </div>
-                    <span className="status-chip">{getColorFamilyLabel(locale, item.colorFamily)}</span>
+                    <div className="market-card__badges">
+                      <span className="status-chip">{getColorFamilyLabel(locale, item.colorFamily)}</span>
+                      {favorite ? (
+                        <span className="status-chip market-card__state market-card__state--favorite">
+                          {locale === "zh" ? "已收藏" : "Favorited"}
+                        </span>
+                      ) : null}
+                      {inCart ? (
+                        <span className="status-chip market-card__state market-card__state--cart">
+                          {locale === "zh" ? "已加入" : "In Cart"}
+                        </span>
+                      ) : null}
+                    </div>
                   </div>
                   <div className="market-card__palette">
                     <span className="market-card__swatch" />
                     <span>{locale === "zh" ? item.paletteLabelZh : item.paletteLabelEn}</span>
+                  </div>
+                  <div className="market-card__specs">
+                    <span>{getLocalizedOptionLabel(locale, "material", item.material)}</span>
+                    <span>{formatDimensions(item.config)}</span>
                   </div>
                   <p className="panel__note">{locale === "zh" ? item.sceneZh : item.sceneEn}</p>
                   <div className="market-card__meta">
@@ -306,25 +364,40 @@ export default function GalleryPage({
                   </div>
                   <div className="panel__actions panel__actions--wrap">
                     <button className="ghost-button" onClick={() => onToggleFavorite(item.id)} type="button">
-                      {favorite ? copy.removeFavorite : copy.addFavorite}
+                      <Icon name="favorite" />
+                      {favorite ? (locale === "zh" ? "已收藏" : "Favorited") : copy.addFavorite}
                     </button>
-                    <button className="ghost-button" onClick={() => setActiveItemId(item.id)} type="button">
+                    <button className="outline-button" onClick={() => setActiveItemId(item.id)} type="button">
+                      <Icon name="search" />
                       {copy.detail}
                     </button>
-                    <button className="primary-button" onClick={() => onAddToCart(item)} type="button">
-                      {copy.addCart}
+                    <button
+                      className={inCart ? "outline-button market-card__cart-toggle is-active" : "primary-button"}
+                      onClick={() => onAddToCart(item)}
+                      type="button"
+                    >
+                      <Icon name="cart" />
+                      {inCart ? (locale === "zh" ? "移出购物车" : "Remove") : copy.addCart}
                     </button>
                   </div>
                 </div>
               </article>
             );
-          })}
+          }) : (
+            <EmptyState
+              detail={locale === "zh" ? "当前筛选下没有可展示的家具场景。" : "No furniture scenes match this filter."}
+              locale={locale}
+              title={locale === "zh" ? "暂无 Gallery 条目" : "No gallery items"}
+              variant="gallery"
+            />
+          )}
         </section>
       </div>
 
       {activeItem ? (
         <GalleryDetailModal
           isFavorite={favorites.includes(activeItem.id)}
+          isInCart={cartGalleryIds.has(activeItem.id)}
           item={activeItem}
           locale={locale}
           onAddToCart={onAddToCart}

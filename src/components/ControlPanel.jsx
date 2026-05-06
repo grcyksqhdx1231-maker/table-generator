@@ -6,6 +6,15 @@ import {
   SCENARIOS
 } from "../lib/catalog";
 import { getLocalizedOptionLabel, localizeOptions } from "../lib/i18n";
+import Icon from "./Icon";
+
+const OPTION_ICON_BY_VALUE = {
+  daylight: "day",
+  late_night: "night",
+  void: "minimal",
+  shape: "tabletop",
+  sketch: "edit"
+};
 
 const MATERIAL_SWATCH_VISUALS = {
   light_wood: {
@@ -55,6 +64,9 @@ function OptionGroup({ label, items, value, onChange, disabledValue = null }) {
             onClick={() => onChange(item.value)}
             type="button"
           >
+            {OPTION_ICON_BY_VALUE[item.value] ? (
+              <Icon name={OPTION_ICON_BY_VALUE[item.value]} />
+            ) : null}
             {item.label}
           </button>
         ))}
@@ -72,6 +84,14 @@ function SliderGroup({
   step,
   valueFormatter
 }) {
+  const minNumber = Number(min);
+  const maxNumber = Number(max);
+  const currentNumber = Number(value);
+  const sliderProgress =
+    maxNumber > minNumber
+      ? `${Math.max(0, Math.min(100, ((currentNumber - minNumber) / (maxNumber - minNumber)) * 100)).toFixed(2)}%`
+      : "0%";
+
   return (
     <div className="control-row">
       <div className="panel__split">
@@ -85,6 +105,7 @@ function SliderGroup({
         min={min}
         onChange={(event) => onChange(Number(event.target.value))}
         step={step}
+        style={{ "--slider-value": sliderProgress }}
         type="range"
         value={value}
       />
@@ -165,6 +186,41 @@ function MaterialSwatchGroup({ label, items, value, onChange, locale }) {
   );
 }
 
+function MaterialTargetGroup({ locale, value, onChange }) {
+  const items =
+    locale === "zh"
+      ? [
+          { value: "tabletop", label: "桌面" },
+          { value: "frame", label: "框架" },
+          { value: "legs", label: "桌腿" },
+          { value: "modules", label: "模块" }
+        ]
+      : [
+          { value: "tabletop", label: "Top" },
+          { value: "frame", label: "Frame" },
+          { value: "legs", label: "Legs" },
+          { value: "modules", label: "Modules" }
+        ];
+
+  return (
+    <div className="control-row">
+      <p className="panel__label">{locale === "zh" ? "材质作用部位" : "Material Target"}</p>
+      <div className="segmented">
+        {items.map((item) => (
+          <button
+            key={item.value}
+            className={`segmented__button ${value === item.value ? "is-active" : ""}`}
+            onClick={() => onChange(item.value)}
+            type="button"
+          >
+            {item.label}
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 function StickySummaryBar({
   locale,
   sizeLabel,
@@ -215,9 +271,11 @@ function StickySummaryBar({
 
       <div className="panel__sticky-actions">
         <button className="ghost-button" onClick={onSaveDraft} type="button">
+          <Icon name="save" />
           {copy.save}
         </button>
         <button className="primary-button" onClick={onGoQuote} type="button">
+          <Icon name="quote" />
           {copy.quote}
         </button>
       </div>
@@ -358,11 +416,17 @@ function getCopy(locale) {
 export default function ControlPanel({
   config,
   draftsCount,
+  currentTargetMaterial,
+  frameTint = "#c8b49a",
+  materialTarget = "tabletop",
   onConfigChange,
   onGoHome,
   onGoGallery,
   onGoProfile,
   onGoQuote,
+  onFrameTintChange,
+  onMaterialTargetChange,
+  onMaterialTargetMaterialChange,
   onOpenDrafts,
   onSaveDraft,
   onTabletopTintChange,
@@ -391,6 +455,13 @@ export default function ControlPanel({
   const sizeLabel = `${config.width.toFixed(2)} × ${config.depth.toFixed(2)} × ${config.height.toFixed(2)} M`;
   const outlineLabel = config.silhouetteMode === "sketch" ? copy.sketchMode : copy.baseMode;
   const materialLabel = getLocalizedOptionLabel(locale, "material", config.material);
+  const sourceHeading = locale === "zh" ? "基础轮廓" : "Base Outline";
+  const sourceTitle = locale === "zh" ? "桌面基础几何" : "Editable Base Geometry";
+  const sourceNote =
+    locale === "zh"
+      ? "这里只保留桌面轮廓与结构基础，不再显示上传图样或 GH 回传能力。"
+      : "Only the core tabletop outline and structure stay active here; upload motifs and GH send-back are removed.";
+  const sourceFileLabel = "base-table-outline";
   const meters = (value, digits = 3) => `${Number(value).toFixed(digits)} M`;
   const percent = (value) => `${Math.round(Number(value) * 100)} %`;
 
@@ -409,6 +480,7 @@ export default function ControlPanel({
               onClick={() => onLocaleChange("zh")}
               type="button"
             >
+              <Icon name="language" />
               中文
             </button>
             <button
@@ -416,6 +488,7 @@ export default function ControlPanel({
               onClick={() => onLocaleChange("en")}
               type="button"
             >
+              <Icon name="language" />
               EN
             </button>
           </div>
@@ -428,13 +501,13 @@ export default function ControlPanel({
         </div>
       </div>
 
-      <div className="panel__section panel__section--intro">
-        <SectionHeader chip="GH" label={copy.sourceLabel} title={copy.sourceTitle} />
+      <div className="panel__section panel__section--intro panel__section--contour">
+        <SectionHeader chip={sourceHeading} label={sourceHeading} title={sourceTitle} />
         <div className="model-source">
           <span className="model-source__dot" />
           <div>
-            <strong>{frameworkFileName}</strong>
-            <p>{copy.sourceNote}</p>
+            <strong>{sourceFileLabel}</strong>
+            <p>{sourceNote}</p>
           </div>
         </div>
         <OptionGroup
@@ -446,7 +519,7 @@ export default function ControlPanel({
         />
       </div>
 
-      <div className="panel__section">
+      <div className="panel__section panel__section--dimensions">
         <SectionHeader chip={sizeLabel} label={copy.dimensionsLabel} title={copy.dimensionsTitle} />
         <div className="control-grid">
           <SliderGroup
@@ -479,7 +552,7 @@ export default function ControlPanel({
         </div>
       </div>
 
-      <div className="panel__section">
+      <div className="panel__section panel__section--frame">
         <SectionHeader
           chip={`${config.frameInset.toFixed(3)} / ${config.frameThickness.toFixed(3)} M`}
           label={copy.frameLabel}
@@ -507,7 +580,7 @@ export default function ControlPanel({
         </div>
       </div>
 
-      <div className="panel__section">
+      <div className="panel__section panel__section--legs">
         <SectionHeader
           chip={`${config.legTopDepth.toFixed(3)} / ${config.legBottomDepth.toFixed(3)} M`}
           label={copy.legsLabel}
@@ -589,7 +662,7 @@ export default function ControlPanel({
         </div>
       </div>
 
-      <div className="panel__section">
+      <div className="panel__section panel__section--modules">
         <SectionHeader
           chip={locale === "zh" ? "参数化模块" : "Parametric Modules"}
           label={copy.modulesLabel}
@@ -635,20 +708,50 @@ export default function ControlPanel({
         </div>
       </div>
 
-      <div className="panel__section">
+      <div className="panel__section panel__section--materials">
         <SectionHeader chip={materialLabel} label={copy.finishLabel} title={copy.finishTitle} />
+        <MaterialTargetGroup
+          locale={locale}
+          onChange={onMaterialTargetChange}
+          value={materialTarget}
+        />
         <MaterialSwatchGroup
           items={localizedMaterials}
-          label={copy.baseMaterial}
+          label={
+            locale === "zh"
+              ? `基础材质 · ${
+                  materialTarget === "tabletop"
+                    ? "桌面"
+                    : materialTarget === "frame"
+                      ? "框架"
+                      : materialTarget === "legs"
+                        ? "桌腿"
+                        : "模块"
+                }`
+              : `Base Material · ${
+                  materialTarget === "tabletop"
+                    ? "Top"
+                    : materialTarget === "frame"
+                      ? "Frame"
+                      : materialTarget === "legs"
+                        ? "Legs"
+                        : "Modules"
+                }`
+          }
           locale={locale}
-          onChange={(material) => onConfigChange({ material })}
-          value={config.material}
+          onChange={onMaterialTargetMaterialChange}
+          value={currentTargetMaterial}
         />
         <div className="control-grid">
           <ColorControl
             label={copy.tabletopColor}
             onChange={onTabletopTintChange}
             value={tabletopTint}
+          />
+          <ColorControl
+            label={locale === "zh" ? "框架颜色" : "Frame Color"}
+            onChange={onFrameTintChange}
+            value={frameTint}
           />
           <ColorControl
             label={copy.moduleColor}
@@ -663,7 +766,7 @@ export default function ControlPanel({
         </div>
       </div>
 
-      <div className="panel__section">
+      <div className="panel__section panel__section--lighting">
         <SectionHeader
           chip={`${config.lightAngle ?? 38}°`}
           label={copy.lightingLabel}
@@ -686,19 +789,23 @@ export default function ControlPanel({
         />
       </div>
 
-      <div className="panel__section">
+      <div className="panel__section panel__section--actions">
         <SectionHeader label={copy.actionsLabel} title={copy.actionsTitle} />
         <div className="panel__actions panel__actions--wrap">
           <button className="ghost-button" onClick={onOpenDrafts} type="button">
+            <Icon name="drafts" />
             {copy.drafts} [{draftsCount}]
           </button>
           <button className="ghost-button" onClick={onGoGallery} type="button">
+            <Icon name="gallery" />
             {copy.gallery}
           </button>
           <button className="ghost-button" onClick={onGoProfile} type="button">
+            <Icon name="profile" />
             {copy.profile}
           </button>
           <button className="ghost-button" onClick={onGoHome} type="button">
+            <Icon name="home" />
             {copy.backHome}
           </button>
         </div>

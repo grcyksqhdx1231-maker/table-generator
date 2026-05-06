@@ -109,9 +109,9 @@ const COLOR_FAMILY_META = {
 
 const FAMILY_IMAGE_POOLS = {
   red: [
-    "/quote-assets/default-scenes/dining-people.jpg",
-    "/generated-scenes/1776904845123-gallery.jpg",
-    "/generated-scenes/1777376805932-gallery.jpg"
+    "/generated-scenes/gemini-recolor-top-modules.jpg",
+    "/generated-scenes/gemini-recolor-top-modules.jpg",
+    "/generated-scenes/gemini-recolor-top-modules.jpg"
   ],
   brown: [
     "/generated-scenes/1776904845754-dining.jpg",
@@ -196,42 +196,56 @@ const SCENE_VARIANTS = [
 const FAMILY_CONFIG_PATCHES = {
   red: {
     material: "metal",
+    patternMode: "metal",
+    finishColor: "#a23e2f",
     shape: "oval",
     legShape: "blade",
     moduleGap: 0.01
   },
   brown: {
     material: "dark_walnut",
+    patternMode: "metal",
+    finishColor: "#7b5a41",
     shape: "rectangle",
     legShape: "square",
     moduleGap: 0.008
   },
   blue: {
     material: "light_wood",
+    patternMode: "metal",
+    finishColor: "#657d98",
     shape: "rectangle",
     legShape: "round",
     moduleGap: 0.008
   },
   purple: {
     material: "rough_stone",
+    patternMode: "metal",
+    finishColor: "#74608b",
     shape: "oval",
     legShape: "blade",
     moduleGap: 0.012
   },
   beige: {
     material: "light_wood",
+    patternMode: "metal",
+    finishColor: "#c8b49a",
     shape: "round",
     legShape: "round",
     moduleGap: 0.006
   },
   gray: {
     material: "rough_stone",
+    patternMode: "metal",
+    finishColor: "#8a9097",
     shape: "rectangle",
     legShape: "square",
     moduleGap: 0.01
   },
   black: {
     material: "metal",
+    patternMode: "metal",
+    finishColor: "#2b2d31",
     shape: "rectangle",
     legShape: "blade",
     moduleGap: 0.012
@@ -388,6 +402,12 @@ export function createGallerySeriesFromSource({
 }) {
   return SERIES_ORDER.map((familyValue) => {
     const meta = getColorFamilyMeta(familyValue);
+    const patch = FAMILY_CONFIG_PATCHES[familyValue] || FAMILY_CONFIG_PATCHES.gray;
+    const nextConfig = createConfig({
+      ...config,
+      ...patch,
+      material: patch.material || meta.defaultMaterial
+    });
 
     return {
       id: baseId + "-" + familyValue,
@@ -400,14 +420,13 @@ export function createGallerySeriesFromSource({
       sceneEn: sourceLabelEn || "Color-series study from current design",
       roomLabel: "Series study / current proportions",
       imageUrl: pickFamilyImage(familyValue, baseId + "-" + familyValue + "-" + label),
-      material: config.material || meta.defaultMaterial,
+      material: nextConfig.material,
       paletteLabelZh: meta.paletteLabelZh,
       paletteLabelEn: meta.paletteLabelEn,
       familyTint: meta.tint,
       familyGlow: meta.glow,
       config: createConfig({
-        ...config,
-        material: config.material || meta.defaultMaterial
+        ...nextConfig
       }),
       uploaded: true,
       createdAt: new Date().toISOString(),

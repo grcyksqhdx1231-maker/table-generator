@@ -33,17 +33,28 @@ function getLegPartId(index) {
 }
 
 function resolvePartOverride(partOverrides, partId, fallbackMaterialKey) {
+  const groupedOverride =
+    partId && partId.startsWith("leg-")
+      ? partOverrides?.legs
+      : partId === "frame"
+        ? partOverrides?.frame
+        : null;
+  const scopedOverride = {
+    ...(groupedOverride || {}),
+    ...(partOverrides?.[partId] || {})
+  };
+
   return {
     materialKey:
-      partOverrides?.[partId]?.materialKey ||
-      partOverrides?.[partId]?.ecoMaterial ||
+      scopedOverride?.materialKey ||
+      scopedOverride?.ecoMaterial ||
       fallbackMaterialKey,
-    tint: partOverrides?.[partId]?.tint || "",
-    widthScale: Number(partOverrides?.[partId]?.widthScale || 1),
-    depthScale: Number(partOverrides?.[partId]?.depthScale || 1),
-    lengthScale: Number(partOverrides?.[partId]?.lengthScale || 1),
-    moduleSizeScale: Number(partOverrides?.[partId]?.moduleSizeScale || 1),
-    thicknessScale: Number(partOverrides?.[partId]?.thicknessScale || 1)
+    tint: scopedOverride?.tint || "",
+    widthScale: Number(scopedOverride?.widthScale || 1),
+    depthScale: Number(scopedOverride?.depthScale || 1),
+    lengthScale: Number(scopedOverride?.lengthScale || 1),
+    moduleSizeScale: Number(scopedOverride?.moduleSizeScale || 1),
+    thicknessScale: Number(scopedOverride?.thicknessScale || 1)
   };
 }
 
@@ -522,36 +533,6 @@ function getPatternBaseColor(profile, partStyle = null) {
 }
 
 function getModuleColor(profile, cell, patternInfo, partStyle = null) {
-  if (profile.patternMode === "uploaded" && patternInfo) {
-    const baseColor = getPatternBaseColor(profile, partStyle);
-    const color = sampleImageColor(patternInfo, cell.u, cell.v, baseColor);
-
-    if (profile.material === "metal") {
-      color.lerp(new THREE.Color("#d8dbde"), 0.02);
-    }
-
-    color.lerp(
-      baseColor,
-      THREE.MathUtils.clamp(0.82 - profile.patternPresence * 0.38, 0, 0.78)
-    );
-    applyBrightness(color, profile.patternBrightness);
-    applyContrast(color, profile.patternContrast);
-
-    const hsl = {};
-    color.getHSL(hsl);
-    color.setHSL(
-      hsl.h,
-      Math.min(1, hsl.s * (0.95 + profile.patternPresence * 0.38) + 0.03),
-      THREE.MathUtils.clamp(
-        (hsl.l - 0.5) * (0.9 + profile.patternContrast * 0.22) + 0.5,
-        0,
-        1
-      )
-    );
-
-    return partStyle?.tint ? tintColor(color, partStyle.tint) : color;
-  }
-
   if (partStyle?.materialKey) {
     return getPatternBaseColor(profile, partStyle);
   }
@@ -562,6 +543,27 @@ function getModuleColor(profile, cell, patternInfo, partStyle = null) {
       : blendHex(MATERIAL_PRESETS[profile.material].topColor, "#fff7ea", 0.18);
 
   return new THREE.Color(profile.finishColor || baseHex);
+}
+
+function getSurfaceFillColor(cell, fillStyle, bounds) {
+  const start = new THREE.Color(fillStyle?.colorA || "#d9381e");
+  const end = new THREE.Color(fillStyle?.colorB || fillStyle?.colorA || "#d9381e");
+
+  if (!fillStyle || fillStyle.mode === "none") {
+    return start;
+  }
+
+  if (fillStyle.mode !== "gradient" || !bounds) {
+    return start;
+  }
+
+  const spanX = Math.max(0.0001, bounds.maxX - bounds.minX);
+  const spanZ = Math.max(0.0001, bounds.maxZ - bounds.minZ);
+  const xMix = THREE.MathUtils.clamp((cell.x - bounds.minX) / spanX, 0, 1);
+  const zMix = THREE.MathUtils.clamp((cell.z - bounds.minZ) / spanZ, 0, 1);
+  const t = THREE.MathUtils.clamp(xMix * 0.72 + zMix * 0.28, 0, 1);
+  const color = start.clone().lerp(end, t);
+  return color;
 }
 
 function buildGhPreviewGeometry(previewMesh) {
@@ -615,6 +617,7 @@ const TableViewport = forwardRef(function TableViewport({
   phase,
   ghPreviewMesh = null,
   patternAsset,
+  surfaceFill = null,
   sketchMaskDataUrl,
   sketchOutline,
   interactive = true,
@@ -840,7 +843,7 @@ const TableViewport = forwardRef(function TableViewport({
         );
         teacherState.frame.castShadow = true;
         teacherState.frame.receiveShadow = true;
-        teacherState.frame.userData.partId = "tabletop";
+        teacherState.frame.userData.partId = "frame";
         frameworkGroup.add(teacherState.frame);
       }
     }
@@ -951,7 +954,7 @@ const TableViewport = forwardRef(function TableViewport({
       const moduleStyle = resolvePartOverride(
         sceneRef.current?.partOverrides,
         "modules",
-        DEFAULT_PART_MATERIALS.tabletop
+        profile.material
       );
       const outlinePoints =
         profile.silhouetteMode === "sketch"
@@ -961,8 +964,13 @@ const TableViewport = forwardRef(function TableViewport({
       const useModuleOutline = insetOutlinePoints.length >= 3;
       const applyLocalMaskEdit =
         profile.silhouetteMode !== "sketch" && Boolean(moduleState.maskInfo);
-      const useInstanceColors =
-        profile.patternMode === "uploaded" && Boolean(moduleState.patternInfo);
+      const currentFillStyle = sceneRef.current?.surfaceFill || surfaceFill;
+      const useInstanceColors = Boolean(
+        currentFillStyle &&
+          currentFillStyle.mode &&
+          currentFillStyle.mode !== "none" &&
+          useModuleOutline
+      );
       const surfaceInset = getTeacherSurfaceInset(metrics);
       const moduleBaseColor = getPatternBaseColor(profile, moduleStyle);
       const effectiveProfile = {
@@ -1003,7 +1011,7 @@ const TableViewport = forwardRef(function TableViewport({
       mesh.userData.partId = "modules";
       const tileEdge = Math.max(
         0.02,
-        effectiveProfile.moduleSize * 1.08 - profile.moduleGap * 0.02
+        effectiveProfile.moduleSize * 0.88 - profile.moduleGap * 0.6
       );
       const baseModuleThickness = Math.max(
         0.006,
@@ -1012,39 +1020,32 @@ const TableViewport = forwardRef(function TableViewport({
           profile.thickness * effectiveProfile.moduleThicknessScale * 0.26
         )
       );
-      const reliefStrength =
-        profile.patternMode === "uploaded" ? Math.max(0, profile.patternRelief) : 0;
-      const topLift =
-        profile.patternMode === "uploaded"
-          ? baseModuleThickness * (0.03 + reliefStrength * 0.06)
-          : 0;
+      const reliefStrength = 0;
+      const topLift = 0;
       const moduleTopY = metrics.height - Math.min(0.0015, metrics.boardThickness * 0.06);
+      const fillBounds = useModuleOutline
+        ? insetOutlinePoints.reduce(
+            (accumulator, point) => ({
+              minX: Math.min(accumulator.minX, point.x),
+              maxX: Math.max(accumulator.maxX, point.x),
+              minZ: Math.min(accumulator.minZ, point.z),
+              maxZ: Math.max(accumulator.maxZ, point.z)
+            }),
+            {
+              minX: Number.POSITIVE_INFINITY,
+              maxX: Number.NEGATIVE_INFINITY,
+              minZ: Number.POSITIVE_INFINITY,
+              maxZ: Number.NEGATIVE_INFINITY
+            }
+          )
+        : null;
 
       cells.forEach((cell, index) => {
-        const drift =
-          profile.patternMode === "uploaded"
-            ? createColorDrift(cell.x * 1.4, cell.z * 0.9)
-            : 0.5;
+        const drift = 0.5;
         const patternBaseColor = getPatternBaseColor(profile, moduleStyle);
-        const patternStrength =
-          profile.patternMode === "uploaded" && moduleState.patternInfo
-            ? sampleImageIntensity(
-                moduleState.patternInfo,
-                cell.u,
-                cell.v,
-                patternBaseColor
-              )
-            : 0.5;
-        const lift =
-          profile.patternMode === "uploaded"
-            ? (drift - 0.5) * topLift +
-              (patternStrength - 0.5) *
-                (baseModuleThickness * (0.05 + reliefStrength * 0.16))
-            : 0;
-        const thicknessFactor =
-          profile.patternMode === "uploaded"
-            ? 0.96 + (patternStrength - 0.5) * (0.06 + reliefStrength * 0.12)
-            : 1;
+        const patternStrength = 0.5;
+        const lift = 0;
+        const thicknessFactor = 1;
         const moduleThickness = Math.max(
           0.006,
           baseModuleThickness * Math.max(0.84, thicknessFactor)
@@ -1065,7 +1066,7 @@ const TableViewport = forwardRef(function TableViewport({
         if (useInstanceColors) {
           mesh.setColorAt(
             index,
-            getModuleColor(profile, cell, moduleState.patternInfo, moduleStyle)
+            getSurfaceFillColor(cell, currentFillStyle, fillBounds)
           );
         }
       });
@@ -1094,7 +1095,12 @@ const TableViewport = forwardRef(function TableViewport({
       const tabletopStyle = resolvePartOverride(
         sceneRef.current?.partOverrides,
         "tabletop",
-        DEFAULT_PART_MATERIALS.tabletop
+        profile.material
+      );
+      const frameStyle = resolvePartOverride(
+        sceneRef.current?.partOverrides,
+        "frame",
+        profile.material
       );
       const sketchOutlinePoints =
         profile.silhouetteMode === "sketch"
@@ -1137,9 +1143,9 @@ const TableViewport = forwardRef(function TableViewport({
       );
       applyEcoFinish(
         teacherState.frame.material,
-        tabletopStyle.materialKey,
-        tabletopStyle.tint,
-        (sceneRef.current?.selectedPartId || "") === "tabletop"
+        frameStyle.materialKey,
+        frameStyle.tint,
+        (sceneRef.current?.selectedPartId || "") === "frame"
       );
 
       const anchors = sketchSilhouetteActive
@@ -1151,7 +1157,7 @@ const TableViewport = forwardRef(function TableViewport({
         const legStyle = resolvePartOverride(
           sceneRef.current?.partOverrides,
           partId,
-          DEFAULT_PART_MATERIALS.legs
+          profile.material
         );
         const anchor = anchors[index];
         if (!anchor) {
@@ -1410,7 +1416,8 @@ const TableViewport = forwardRef(function TableViewport({
       phase,
       moduleState,
       partOverrides,
-      selectedPartId
+      selectedPartId,
+      surfaceFill
     };
     applyGhPreviewMesh(ghPreviewMesh);
 
@@ -1466,23 +1473,11 @@ const TableViewport = forwardRef(function TableViewport({
   useEffect(() => {
     const state = sceneRef.current;
     if (!state) {
-      return undefined;
+      return;
     }
 
-    let cancelled = false;
-
-    loadImageSampler(patternAsset?.dataUrl || "").then((patternInfo) => {
-      if (cancelled || !sceneRef.current) {
-        return;
-      }
-
-      sceneRef.current.moduleState.patternInfo = patternInfo;
-      sceneRef.current.updateTable(sceneRef.current.shapeState);
-    });
-
-    return () => {
-      cancelled = true;
-    };
+    state.moduleState.patternInfo = null;
+    state.updateTable(state.shapeState);
   }, [patternAsset]);
 
   useEffect(() => {
@@ -1518,6 +1513,16 @@ const TableViewport = forwardRef(function TableViewport({
     state.selectedPartId = selectedPartId;
     state.updateTable(state.shapeState);
   }, [partOverrides, selectedPartId]);
+
+  useEffect(() => {
+    const state = sceneRef.current;
+    if (!state) {
+      return;
+    }
+
+    state.surfaceFill = surfaceFill;
+    state.updateTable(state.shapeState);
+  }, [surfaceFill]);
 
   useEffect(() => {
     const state = sceneRef.current;

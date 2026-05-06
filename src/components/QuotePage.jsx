@@ -1,4 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
+import BrandLogo from "./BrandLogo";
+import Icon from "./Icon";
 import TableViewport from "./TableViewport";
 import { requestQuoteSceneGeneration } from "../lib/api";
 import { getLocalizedOptionLabel } from "../lib/i18n";
@@ -84,6 +86,12 @@ function formatMeters(value) {
   return `${Number(value).toFixed(2)} m`;
 }
 
+function quoteRateLabel(rate, locale) {
+  return locale === "zh"
+    ? `${formatMoney(rate[0], locale)}-${formatMoney(rate[1], locale)}`
+    : `${formatMoney(rate[0], locale)}-${formatMoney(rate[1], locale)}`;
+}
+
 function getFootprintPerimeter(config) {
   const width = Math.max(0.65, Number(config.width) || 1.4);
   const depth = Math.max(0.65, Number(config.depth) || 0.65);
@@ -108,7 +116,6 @@ function getFootprintPerimeter(config) {
 function getComplexityProfile(config, locale) {
   const densityScore = 1 - clamp((config.moduleSize - 0.04) / 0.24, 0, 1);
   const densityPremium = densityScore * 0.14;
-  const silhouettePremium = config.silhouetteMode === "sketch" ? 0.14 : 0;
   const legSpreadPremium = (Math.abs(config.legSpread || 0) / 0.08) * 0.05;
   const legVolumePremium =
     (clamp(config.legBellyDepth || 0, 0, 0.08) / 0.08) * 0.04 +
@@ -122,10 +129,6 @@ function getComplexityProfile(config, locale) {
     {
       label: locale === "zh" ? "高密度模块" : "Dense module field",
       value: densityPremium
-    },
-    {
-      label: locale === "zh" ? "手绘轮廓" : "Sketch silhouette",
-      value: silhouettePremium
     },
     {
       label: locale === "zh" ? "桌腿外展" : "Leg spread",
@@ -181,13 +184,17 @@ function buildQuote(config, locale) {
   const finishHigh = materialModel.finishRate[1] + connectorCount * 2.1;
   const setupLow = materialModel.setupRate[0];
   const setupHigh = materialModel.setupRate[1];
+  const aiSceneLow = 4 * 180;
+  const aiSceneHigh = 4 * 420;
+  const serviceLow = 900 + (config.silhouetteMode === "sketch" ? 420 : 0);
+  const serviceHigh = 1900 + (config.silhouetteMode === "sketch" ? 760 : 0);
 
   const subtotalLow =
-    (tabletopLow + frameLegLow + moduleLow + finishLow + setupLow) *
+    (tabletopLow + frameLegLow + moduleLow + finishLow + setupLow + aiSceneLow + serviceLow) *
     complexity.multiplier *
     sizePremium;
   const subtotalHigh =
-    (tabletopHigh + frameLegHigh + moduleHigh + finishHigh + setupHigh) *
+    (tabletopHigh + frameLegHigh + moduleHigh + finishHigh + setupHigh + aiSceneHigh + serviceHigh) *
     (complexity.multiplier + 0.08) *
     (sizePremium + 0.04);
 
@@ -230,27 +237,57 @@ function buildQuote(config, locale) {
     costBreakdown: [
       {
         key: "tabletop",
-        label: locale === "zh" ? "桌面材料" : "Tabletop",
+        label: locale === "zh" ? "桌面材料" : "Tabletop Material",
+        detail:
+          locale === "zh"
+            ? `${area.toFixed(2)} ㎡ × ${quoteRateLabel(materialModel.tabletopRate, locale)}`
+            : `${area.toFixed(2)} sqm × ${quoteRateLabel(materialModel.tabletopRate, locale)}`,
         low: roundToHundred(tabletopLow * complexity.multiplier),
         high: roundToHundred(tabletopHigh * (complexity.multiplier + 0.03))
       },
       {
-        key: "frame-legs",
-        label: locale === "zh" ? "桌架与桌腿" : "Frame & Legs",
+        key: "fabrication",
+        label: locale === "zh" ? "结构加工" : "Structural Fabrication",
+        detail:
+          locale === "zh"
+            ? `边框 ${perimeter.toFixed(2)} m，桌腿 ${config.legCount} 支`
+            : `${perimeter.toFixed(2)} m frame, ${config.legCount} legs`,
         low: roundToHundred(frameLegLow * sizePremium),
         high: roundToHundred(frameLegHigh * (sizePremium + 0.04))
       },
       {
         key: "modules",
-        label: locale === "zh" ? "参数化模块" : "Module System",
+        label: locale === "zh" ? "参数化模块" : "Parametric Modules",
+        detail:
+          locale === "zh"
+            ? `${moduleCount} 个三角模块，${connectorCount} 个连接件`
+            : `${moduleCount} triangular modules, ${connectorCount} connectors`,
         low: roundToHundred(moduleLow * complexity.multiplier),
         high: roundToHundred(moduleHigh * (complexity.multiplier + 0.05))
       },
       {
         key: "finish",
-        label: locale === "zh" ? "打样与收口" : "Finish & Assembly",
+        label: locale === "zh" ? "表面处理" : "Surface Finish",
+        detail: locale === "zh" ? "打样、封边、上色与装配" : "Sampling, edging, color, and assembly",
         low: roundToHundred(finishLow + setupLow),
         high: roundToHundred(finishHigh + setupHigh)
+      },
+      {
+        key: "ai-scenes",
+        label: locale === "zh" ? "AI 场景图" : "AI Scene Renders",
+        detail: locale === "zh" ? "4 张空间效果图生成与整理" : "4 generated room scenes and layout prep",
+        low: roundToHundred(aiSceneLow),
+        high: roundToHundred(aiSceneHigh)
+      },
+      {
+        key: "service",
+        label: locale === "zh" ? "设计服务" : "Design Service",
+        detail:
+          locale === "zh"
+            ? "参数整理、报价校核与生产文件准备"
+            : "Parameter review, quote check, and production file prep",
+        low: roundToHundred(serviceLow),
+        high: roundToHundred(serviceHigh)
       }
     ],
     estimateHigh,
@@ -348,7 +385,7 @@ function getCopy(locale) {
       drafts: "草稿库",
       home: "开始界面",
       eyebrow: "场景化报价",
-      title: "Tri-Mesh Table",
+      title: "定制参数化桌",
       heroScene: "主展示场景",
       heroRoom: "房间尺寸 6.80 x 5.40 x 3.20 m",
       priceTitle: "预估报价",
@@ -375,7 +412,7 @@ function getCopy(locale) {
     drafts: "Drafts",
     home: "Home",
     eyebrow: "Spatial Quote",
-    title: "Tri-Mesh Table",
+    title: "Custom Parametric Table",
     heroScene: "Hero Scene",
     heroRoom: "Room 6.80 x 5.40 x 3.20 m",
     priceTitle: "Estimated Quote",
@@ -477,6 +514,7 @@ function SceneCard({
   ghPreviewMesh,
   partOverrides,
   patternAsset,
+  surfaceFill,
   sketchMaskDataUrl,
   sketchOutline,
   copy,
@@ -514,6 +552,7 @@ function SceneCard({
             partOverrides={partOverrides}
             patternAsset={patternAsset}
             phase="configurator"
+            surfaceFill={surfaceFill}
             sketchMaskDataUrl={sketchMaskDataUrl}
             sketchOutline={sketchOutline}
             transparentScene
@@ -546,11 +585,13 @@ export default function QuotePage({
   onOpenDrafts,
   partOverrides,
   patternAsset,
+  surfaceFill,
   sketchMaskDataUrl,
   sketchOutline,
   visible
 }) {
   const captureViewportRef = useRef(null);
+  const pageRef = useRef(null);
   const [generatedScenes, setGeneratedScenes] = useState({});
   const [isGenerating, setIsGenerating] = useState(false);
   const [activeSceneKey, setActiveSceneKey] = useState("");
@@ -572,6 +613,18 @@ export default function QuotePage({
     setGeneratedScenes({});
     setActiveSceneKey("");
   }, [config, locale, partOverrides, patternAsset?.dataUrl, sketchMaskDataUrl]);
+
+  useEffect(() => {
+    if (!visible) {
+      return undefined;
+    }
+
+    const frame = window.requestAnimationFrame(() => {
+      pageRef.current?.scrollTo({ left: 0, top: 0, behavior: "auto" });
+    });
+
+    return () => window.cancelAnimationFrame(frame);
+  }, [visible]);
 
   useEffect(() => {
     if (!activeSceneImage) {
@@ -652,29 +705,33 @@ export default function QuotePage({
   }
 
   return (
-    <section className="quote-page quote-page--rich">
+    <section className="quote-page quote-page--rich" ref={pageRef}>
       <header className="quote-nav">
         <div>
           <p className="panel__label">{copy.eyebrow}</p>
-          <strong className="quote-nav__brand">TRI-MESH</strong>
+          <BrandLogo className="brand-lockup--nav" label="Table Generator" compact />
         </div>
 
         <div className="panel__actions panel__actions--wrap">
           <button className="ghost-button" onClick={onHome} type="button">
+            <Icon name="home" />
             {copy.home}
           </button>
           <button className="ghost-button" onClick={onOpenDrafts} type="button">
+            <Icon name="drafts" />
             {copy.drafts} [{draftsCount}]
           </button>
           <button
-            className="ghost-button"
+            className={`ghost-button ${isGenerating ? "is-loading" : ""}`}
             disabled={isGenerating}
             onClick={handleGenerateScenes}
             type="button"
           >
+            <Icon name="generate" />
             {isGenerating ? copy.generatingButton : copy.generateButton}
           </button>
           <button className="primary-button" onClick={onBack} type="button">
+            <Icon name="back" />
             {copy.back}
           </button>
         </div>
@@ -693,6 +750,7 @@ export default function QuotePage({
           partOverrides={partOverrides}
           patternAsset={patternAsset}
           phase="configurator"
+          surfaceFill={surfaceFill}
           sketchMaskDataUrl={sketchMaskDataUrl}
           sketchOutline={sketchOutline}
           transparentScene={false}
@@ -725,14 +783,16 @@ export default function QuotePage({
             </div>
             <div className="quote-hero__actions">
               <button
-                className="primary-button"
+                className={`primary-button ${isGenerating ? "is-loading" : ""}`}
                 disabled={isGenerating}
                 onClick={handleGenerateScenes}
                 type="button"
               >
+                <Icon name="generate" />
                 {isGenerating ? copy.generatingButton : heroCopy.primaryAction}
               </button>
               <button className="ghost-button quote-hero__ghost" onClick={onBack} type="button">
+                <Icon name="back" />
                 {heroCopy.secondaryAction}
               </button>
             </div>
@@ -758,11 +818,12 @@ export default function QuotePage({
             <h2 className="panel__mini-title">{heroCopy.sceneLead}</h2>
           </div>
           <button
-            className="ghost-button"
+            className={`ghost-button ${isGenerating ? "is-loading" : ""}`}
             disabled={isGenerating}
             onClick={handleGenerateScenes}
             type="button"
           >
+            <Icon name="generate" />
             {isGenerating ? copy.generatingButton : copy.generateButton}
           </button>
         </header>
@@ -779,6 +840,7 @@ export default function QuotePage({
               onOpenImage={(scene) => setActiveSceneKey(scene.key)}
               partOverrides={partOverrides}
               patternAsset={patternAsset}
+              surfaceFill={surfaceFill}
               sketchMaskDataUrl={sketchMaskDataUrl}
               sketchOutline={sketchOutline}
             />
@@ -856,6 +918,7 @@ export default function QuotePage({
                 <div key={item.key}>
                   <strong>{formatMoneyRange(item.low, item.high, locale)}</strong>
                   <span>{item.label}</span>
+                  {item.detail ? <em>{item.detail}</em> : null}
                 </div>
               ))}
             </div>
@@ -885,11 +948,12 @@ export default function QuotePage({
 
           <article className="quote-card quote-card--cta quote-card--generate-only">
             <button
-              className="primary-button"
+              className={`primary-button ${isGenerating ? "is-loading" : ""}`}
               disabled={isGenerating}
               onClick={handleGenerateScenes}
               type="button"
             >
+              <Icon name="generate" />
               {isGenerating ? copy.generatingButton : copy.generateButton}
             </button>
           </article>
@@ -914,7 +978,7 @@ export default function QuotePage({
               onClick={() => setActiveSceneKey("")}
               type="button"
             >
-              &times;
+              <Icon name="close" />
             </button>
             <img
               alt={`${activeScene?.scene || ""} render large`}

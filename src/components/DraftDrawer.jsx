@@ -1,4 +1,6 @@
 import { getLocalizedDraftLabel, getLocalizedOptionLabel, t } from "../lib/i18n";
+import EmptyState from "./EmptyState";
+import Icon from "./Icon";
 
 function formatDate(value, locale) {
   try {
@@ -28,13 +30,24 @@ export default function DraftDrawer({
           <p className="panel__label">{t(locale, "drafts.eyebrow")}</p>
           <h2 className="drafts__title">{t(locale, "drafts.title")}</h2>
         </div>
-        <button className="icon-button" onClick={onClose} type="button">
-          {t(locale, "drafts.close")}
+        <button
+          aria-label={t(locale, "drafts.close")}
+          className="icon-button icon-button--square"
+          onClick={onClose}
+          type="button"
+        >
+          <Icon name="close" />
         </button>
       </div>
 
       {drafts.length === 0 ? (
-        <p className="drafts__empty">{t(locale, "drafts.empty")}</p>
+        <EmptyState
+          compact
+          detail={t(locale, "drafts.empty")}
+          locale={locale}
+          title={locale === "zh" ? "草稿库还是空的" : "No drafts yet"}
+          variant="drafts"
+        />
       ) : (
         <div className="drafts__list">
           {drafts.map((draft) => (
@@ -53,6 +66,7 @@ export default function DraftDrawer({
                   onClick={() => onSelectDraft(draft)}
                   type="button"
                 >
+                  <Icon name="download" />
                   {locale === "zh" ? "恢复方案" : "Restore"}
                 </button>
                 <button
@@ -60,6 +74,7 @@ export default function DraftDrawer({
                   onClick={() => onUploadDraftToGallery(draft)}
                   type="button"
                 >
+                  <Icon name="upload" />
                   {locale === "zh" ? "上传到 Gallery" : "Upload To Gallery"}
                 </button>
               </div>

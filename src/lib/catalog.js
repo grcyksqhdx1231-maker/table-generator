@@ -16,8 +16,7 @@ export const SILHOUETTE_MODES = [
 ];
 
 export const PATTERN_MODES = [
-  { value: "metal", label: "Metal Triangles" },
-  { value: "uploaded", label: "Uploaded Motif" }
+  { value: "metal", label: "Metal Triangles" }
 ];
 
 export const LEG_SHAPES = [

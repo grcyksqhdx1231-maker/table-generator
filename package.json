@@ -9,6 +9,8 @@
     "dev:server": "node --env-file=.env server/index.js",
     "build": "vite build",
     "poster:stefan": "node scripts/generate_stefan_hurlemann_poster.mjs",
+    "poster:stefan:cropzoom": "node scripts/generate_stefan_hurlemann_poster_draft01_cropzoom.mjs",
+    "poster:stefan:three": "node scripts/generate_stefan_hurlemann_poster_three_columns.mjs",
     "preview": "vite preview",
     "start": "node server/index.js"
   },

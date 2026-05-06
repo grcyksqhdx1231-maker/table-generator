@@ -1,5 +1,7 @@
 import { useState } from "react";
 import { t } from "../lib/i18n";
+import EmptyState from "./EmptyState";
+import Icon from "./Icon";
 
 export default function ChatDock({
   visible,
@@ -14,11 +16,9 @@ export default function ChatDock({
   activeVariantId,
   designLocks,
   hasSketch,
-  rhinoBridgeState,
   onGenerateDirections,
   onApplyLocalEdit,
   onApplyVariant,
-  onSendToRhino,
   onToggleLock,
   locale
 }) {
@@ -68,7 +68,7 @@ export default function ChatDock({
           </div>
         </div>
 
-        <section className="chat-dock__section">
+        <section className="chat-dock__section chat-dock__section--prompt">
           <div className="panel__split panel__split--tight">
             <div>
               <p className="panel__label">{t(locale, "chat.unifiedInput")}</p>
@@ -84,49 +84,18 @@ export default function ChatDock({
           />
           <div className="panel__actions">
           <button
-            className="primary-button"
+            className={`primary-button generate-button ${isBusy ? "is-loading" : ""}`}
             disabled={isBusy}
             onClick={() => onGenerateDirections(prompt)}
             type="button"
           >
+              <Icon name="generate" />
               {isBusy ? t(locale, "chat.generating") : t(locale, "chat.generate")}
             </button>
           </div>
         </section>
 
-        <section className="chat-dock__section">
-          <div className="panel__split panel__split--tight">
-            <div>
-              <p className="panel__label">
-                {locale === "zh" ? "RHINO / GH 链路" : "Rhino / GH Bridge"}
-              </p>
-              <h3 className="panel__mini-title">
-                {locale === "zh" ? "发送当前参数并等待 GH 返回" : "Send current config and wait for GH"}
-              </h3>
-            </div>
-          </div>
-          <div className="panel__actions">
-            <button
-              className="ghost-button"
-              disabled={isBusy || rhinoBridgeState?.busy}
-              onClick={onSendToRhino}
-              type="button"
-            >
-              {rhinoBridgeState?.busy
-                ? locale === "zh"
-                  ? "等待 GH 返回..."
-                  : "Waiting for GH..."
-                : locale === "zh"
-                  ? "发送到 Rhino / GH"
-                  : "Send To Rhino / GH"}
-            </button>
-          </div>
-          {rhinoBridgeState?.message ? (
-            <p className="panel__note">{rhinoBridgeState.message}</p>
-          ) : null}
-        </section>
-
-        <section className="chat-dock__section">
+        <section className="chat-dock__section chat-dock__section--locks">
           <div className="panel__split panel__split--tight">
             <div>
               <p className="panel__label">{t(locale, "chat.locks")}</p>
@@ -143,13 +112,14 @@ export default function ChatDock({
                 onClick={() => onToggleLock(lock.key)}
                 type="button"
               >
+                <Icon name={designLocks[lock.key] ? "lock" : "unlock"} />
                 {lock.label}
               </button>
             ))}
           </div>
         </section>
 
-        <section className="chat-dock__section">
+        <section className="chat-dock__section chat-dock__section--understanding">
           <div className="panel__split panel__split--tight">
             <div>
               <p className="panel__label">{t(locale, "chat.understanding")}</p>
@@ -179,11 +149,16 @@ export default function ChatDock({
               </div>
             </div>
           ) : (
-            <p className="panel__note">{t(locale, "chat.understandingEmpty")}</p>
+            <EmptyState
+              compact
+              detail={t(locale, "chat.understandingEmpty")}
+              locale={locale}
+              variant="ai"
+            />
           )}
         </section>
 
-        <section className="chat-dock__section">
+        <section className="chat-dock__section chat-dock__section--variants">
           <div className="panel__split panel__split--tight">
             <div>
               <p className="panel__label">{t(locale, "chat.variants")}</p>
@@ -209,6 +184,7 @@ export default function ChatDock({
                       onClick={() => onApplyVariant(variant)}
                       type="button"
                     >
+                      <Icon name="next" />
                       {activeVariantId === variant.id
                         ? t(locale, "common.active")
                         : t(locale, "common.useThis")}
@@ -217,12 +193,17 @@ export default function ChatDock({
                 </article>
               ))
             ) : (
-              <p className="panel__note">{t(locale, "chat.variantsEmpty")}</p>
+              <EmptyState
+                compact
+                detail={t(locale, "chat.variantsEmpty")}
+                locale={locale}
+                variant={isBusy ? "loading" : "ai"}
+              />
             )}
           </div>
         </section>
 
-        <section className="chat-dock__section">
+        <section className="chat-dock__section chat-dock__section--local-edit">
           <div className="panel__split panel__split--tight">
             <div>
               <p className="panel__label">{t(locale, "chat.localEdit")}</p>
@@ -262,6 +243,7 @@ export default function ChatDock({
               }
               type="button"
             >
+              <Icon name="edit" />
               {isBusy ? t(locale, "chat.applying") : t(locale, "chat.apply")}
             </button>
           </div>

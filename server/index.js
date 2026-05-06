@@ -94,7 +94,7 @@ async function waitForGhResponse(requestId, timeoutMs = 60000) {
 const VALID_SCENARIOS = new Set(["daylight", "late_night", "void"]);
 const VALID_SHAPES = new Set(["rectangle", "round", "oval"]);
 const VALID_SILHOUETTE_MODES = new Set(["shape", "sketch"]);
-const VALID_PATTERN_MODES = new Set(["metal", "uploaded"]);
+const VALID_PATTERN_MODES = new Set(["metal"]);
 const VALID_LEG_SHAPES = new Set(["round", "square", "blade"]);
 const VALID_MATERIALS = new Set([
   "light_wood",
@@ -1352,50 +1352,21 @@ app.get("/api/health", (_request, response) => {
 });
 
 app.get("/api/gh-bridge/status", async (_request, response) => {
-  await ensureBridgeDir();
-
-  let latestResponse = null;
-
-  try {
-    latestResponse = await readJsonFile(ghResponsePath);
-  } catch {
-    latestResponse = null;
-  }
-
-  response.json({
-    ok: true,
-    bridgeDir,
-    requestPath: ghRequestPath,
-    responsePath: ghResponsePath,
-    latestResponse
+  response.status(410).json({
+    ok: false,
+    disabled: true,
+    error:
+      "The Rhino / Grasshopper send-back bridge is disabled in this presentation build."
   });
 });
 
 app.post("/api/gh-bridge/generate", async (request, response) => {
-  await ensureBridgeDir();
-
-  const requestId = `gh-${Date.now()}`;
-  const ghRequest = {
-    requestId,
-    createdAt: new Date().toISOString(),
-    payload: buildGhPayload(request.body?.config || {})
-  };
-
-  await fs.writeFile(ghRequestPath, JSON.stringify(ghRequest, null, 2), "utf8");
-
-  const ghResponse = await waitForGhResponse(requestId);
-
-  if (!ghResponse) {
-    return response.status(504).json({
-      error:
-        "GH request was written, but Grasshopper did not return yet. In GH, make sure the bridge GhPython component is running and recomputing.",
-      requestId,
-      requestPath: ghRequestPath,
-      responsePath: ghResponsePath
-    });
-  }
-
-  return response.json(ghResponse);
+  response.status(410).json({
+    ok: false,
+    disabled: true,
+    error:
+      "The Rhino / Grasshopper send-back bridge is disabled in this presentation build."
+  });
 });
 
 app.post("/api/design", async (request, response) => {

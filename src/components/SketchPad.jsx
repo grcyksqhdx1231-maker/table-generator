@@ -1,5 +1,7 @@
 ﻿import { useEffect, useRef, useState } from "react";
 
+import Icon from "./Icon";
+
 const BACKGROUND = "#f3efe8";
 const INK_SWATCHES = [
   { labelEn: "Light Wood", labelZh: "浅木", color: "#d6a678" },
@@ -9,19 +11,20 @@ const INK_SWATCHES = [
   { labelEn: "Accent", labelZh: "强调色", color: "#d9381e" }
 ];
 
-function drawStroke(context, stroke) {
+function drawStroke(context, stroke, overrideColor = "") {
   if (!stroke.points.length) {
     return;
   }
 
-  context.strokeStyle = stroke.color;
+  const strokeColor = overrideColor || stroke.color;
+  context.strokeStyle = strokeColor;
   context.lineCap = "round";
   context.lineJoin = "round";
 
   if (stroke.points.length === 1) {
     const point = stroke.points[0];
     context.beginPath();
-    context.fillStyle = stroke.color;
+    context.fillStyle = strokeColor;
     context.arc(point.x, point.y, stroke.size * 0.35, 0, Math.PI * 2);
     context.fill();
     return;
@@ -59,6 +62,58 @@ function drawTriangleGrid(context, width, height) {
       context.stroke();
     }
   }
+}
+
+function createReferencePreviewDataUrl(summary, width, height) {
+  if (!summary?.hasContent) {
+    return "";
+  }
+
+  const canvas = document.createElement("canvas");
+  canvas.width = width;
+  canvas.height = height;
+  const context = canvas.getContext("2d");
+
+  context.fillStyle = BACKGROUND;
+  context.fillRect(0, 0, width, height);
+  drawTriangleGrid(context, width, height);
+
+  const outline = (summary.hullNormalized || []).map((point) => ({
+    x: point.x * width,
+    y: point.y * height
+  }));
+
+  if (outline.length >= 3) {
+    context.save();
+    context.beginPath();
+    context.moveTo(outline[0].x, outline[0].y);
+    for (let index = 1; index < outline.length; index += 1) {
+      context.lineTo(outline[index].x, outline[index].y);
+    }
+    context.closePath();
+    context.fillStyle = "rgba(217, 56, 30, 0.04)";
+    context.fill();
+    context.strokeStyle = "#2a1d18";
+    context.lineWidth = Math.max(1.6, Math.min(width, height) * 0.006);
+    context.lineJoin = "round";
+    context.lineCap = "round";
+    context.stroke();
+    context.restore();
+  }
+
+  const anchorStep = Math.max(1, Math.floor(outline.length / 10));
+  outline.forEach((point, index) => {
+    if (index % anchorStep !== 0) {
+      return;
+    }
+
+    context.beginPath();
+    context.fillStyle = index === 0 ? "#d9381e" : "#2a1d18";
+    context.arc(point.x, point.y, Math.max(1.4, Math.min(width, height) * 0.008), 0, Math.PI * 2);
+    context.fill();
+  });
+
+  return canvas.toDataURL("image/png", 0.92);
 }
 
 function cross(origin, a, b) {
@@ -535,7 +590,93 @@ function createMaskDataUrl(strokes, width, height) {
   return maskCanvas.toDataURL("image/png", 0.92);
 }
 
+function formatPercent(value) {
+  return `${Math.round(Number(value || 0) * 100)}%`;
+}
+
+function createEmptyFeedback() {
+  return {
+    hasContent: false,
+    pointCount: 0,
+    hullPointCount: 0,
+    coverage: 0,
+    hullNormalized: []
+  };
+}
+
+function clampUnit(value) {
+  return Math.max(0.02, Math.min(0.98, Number(value) || 0));
+}
+
+function normalizeHullPoint(point) {
+  return {
+    x: clampUnit(point?.x),
+    y: clampUnit(point?.y)
+  };
+}
+
+function buildEditedOutlineSummary(baseFeedback, hullNormalized, width, height) {
+  const hull = (hullNormalized || []).map(normalizeHullPoint);
+  const pixelHull = hull.map((point) => ({
+    x: point.x * Math.max(1, width),
+    y: point.y * Math.max(1, height)
+  }));
+  const bounds = hull.length ? getBounds(pixelHull) : null;
+
+  return {
+    ...baseFeedback,
+    hasContent: hull.length >= 3,
+    coverage:
+      hull.length >= 3
+        ? Math.min(1, polygonArea(pixelHull) / Math.max(1, width * height))
+        : 0,
+    hullNormalized: hull,
+    hullPointCount: hull.length,
+    boundsWidthRatio: bounds ? Math.min(1, bounds.width / Math.max(1, width)) : 0,
+    boundsHeightRatio: bounds ? Math.min(1, bounds.height / Math.max(1, height)) : 0,
+    bounds: bounds
+      ? {
+          x: bounds.minX,
+          y: bounds.minY,
+          width: bounds.width,
+          height: bounds.height
+        }
+      : null
+  };
+}
+
+function getFeedbackCopy(locale, feedback) {
+  if (!feedback?.hasContent) {
+    return {
+      title: locale === "zh" ? "等待闭合轮廓" : "Waiting for a closed outline",
+      before: locale === "zh" ? "原始笔触" : "Raw strokes",
+      after: locale === "zh" ? "识别轮廓" : "Recognized outline",
+      coverage: locale === "zh" ? "画面覆盖" : "Coverage",
+      detail:
+        locale === "zh"
+          ? "画一个尽量闭合的外轮廓，系统会把它转成桌面边界。"
+          : "Draw a mostly closed outer contour and the system will convert it into a tabletop boundary."
+    };
+  }
+
+  return {
+    title:
+      locale === "zh"
+        ? `已识别 ${feedback.hullPointCount || 0} 个控制点`
+        : `${feedback.hullPointCount || 0} control points recognized`,
+    before: locale === "zh" ? "原始笔触" : "Raw strokes",
+    after: locale === "zh" ? "识别轮廓" : "Recognized outline",
+    coverage: locale === "zh" ? "画面覆盖" : "Coverage",
+    detail:
+      locale === "zh"
+        ? `从 ${feedback.pointCount || 0} 个笔触点重建为 ${feedback.hullPointCount || 0} 个桌面控制点，可拖动锚点微调。`
+        : `Rebuilt ${feedback.pointCount || 0} raw points into ${feedback.hullPointCount || 0} tabletop control points. Drag anchors to refine.`
+  };
+}
+
 export default function SketchPad({
+  fillStyle,
+  onFillStyleChange,
   onSketchChange,
   syncLabel,
   syncDetail,
@@ -544,12 +685,20 @@ export default function SketchPad({
   transparentSurface = false
 }) {
   const canvasRef = useRef(null);
+  const recognitionRef = useRef(null);
   const strokesRef = useRef([]);
   const activeStrokeRef = useRef(null);
+  const draggedAnchorRef = useRef(null);
   const canvasMetricsRef = useRef({ width: 1, height: 1, dpr: 1 });
+  const feedbackRef = useRef(createEmptyFeedback());
   const snapshotTimerRef = useRef(null);
   const [brushColor, setBrushColor] = useState(INK_SWATCHES[0].color);
   const [brushSize, setBrushSize] = useState(12);
+  const [feedback, setFeedback] = useState(createEmptyFeedback);
+  const gradientIdRef = useRef(
+    `sketch-fill-gradient-${Math.random().toString(36).slice(2, 10)}`
+  );
+  feedbackRef.current = feedback;
 
   function drawAll() {
     const canvas = canvasRef.current;
@@ -561,12 +710,12 @@ export default function SketchPad({
     const context = canvas.getContext("2d");
     context.setTransform(dpr, 0, 0, dpr, 0, 0);
     context.clearRect(0, 0, width, height);
-    context.fillStyle = transparentSurface ? "rgba(243, 239, 232, 0.48)" : BACKGROUND;
+    context.fillStyle = transparentSurface ? "rgba(247, 244, 238, 0.9)" : BACKGROUND;
     context.fillRect(0, 0, width, height);
     drawTriangleGrid(context, width, height);
 
     strokesRef.current.forEach((stroke) => {
-      drawStroke(context, stroke);
+      drawStroke(context, stroke, transparentSurface ? "#2a1d18" : "");
     });
   }
 
@@ -578,10 +727,38 @@ export default function SketchPad({
 
     const { width, height } = canvasMetricsRef.current;
     const summary = summarizeStrokes(strokesRef.current, width, height);
+    feedbackRef.current = summary;
+    setFeedback(summary);
 
     onSketchChange({
       ...summary,
-      dataUrl: summary.hasContent ? canvas.toDataURL("image/png", 0.92) : "",
+      dataUrl: createReferencePreviewDataUrl(summary, width, height),
+      maskDataUrl: summary.hasContent
+        ? createMaskDataUrl(strokesRef.current, width, height)
+        : "",
+      updatedAt: Date.now()
+    });
+  }
+
+  function emitEditedOutline(hullNormalized) {
+    const canvas = canvasRef.current;
+    if (!canvas) {
+      return;
+    }
+
+    const { width, height } = canvasMetricsRef.current;
+    const summary = buildEditedOutlineSummary(
+      feedbackRef.current,
+      hullNormalized,
+      width,
+      height
+    );
+
+    feedbackRef.current = summary;
+    setFeedback(summary);
+    onSketchChange({
+      ...summary,
+      dataUrl: createReferencePreviewDataUrl(summary, width, height),
       maskDataUrl: summary.hasContent
         ? createMaskDataUrl(strokesRef.current, width, height)
         : "",
@@ -631,6 +808,10 @@ export default function SketchPad({
   }
 
   function handlePointerDown(event) {
+    if (draggedAnchorRef.current) {
+      return;
+    }
+
     if (event.button !== 0) {
       return;
     }
@@ -652,6 +833,10 @@ export default function SketchPad({
   }
 
   function handlePointerMove(event) {
+    if (draggedAnchorRef.current) {
+      return;
+    }
+
     const active = activeStrokeRef.current;
     if (!active || active.pointerId !== event.pointerId) {
       return;
@@ -663,6 +848,10 @@ export default function SketchPad({
   }
 
   function handlePointerUp(event) {
+    if (draggedAnchorRef.current) {
+      return;
+    }
+
     const active = activeStrokeRef.current;
     if (!active || active.pointerId !== event.pointerId) {
       return;
@@ -677,9 +866,111 @@ export default function SketchPad({
   function clearCanvas() {
     strokesRef.current = [];
     activeStrokeRef.current = null;
+    draggedAnchorRef.current = null;
+    const emptyFeedback = createEmptyFeedback();
+    feedbackRef.current = emptyFeedback;
+    setFeedback(emptyFeedback);
     drawAll();
     emitSnapshot();
   }
+
+  function getNormalizedPointFromEvent(event) {
+    const rect = recognitionRef.current?.getBoundingClientRect();
+    if (!rect) {
+      return { x: 0.5, y: 0.5 };
+    }
+
+    return {
+      x: clampUnit((event.clientX - rect.left) / Math.max(1, rect.width)),
+      y: clampUnit((event.clientY - rect.top) / Math.max(1, rect.height))
+    };
+  }
+
+  function updateAnchor(anchorIndex, nextPoint) {
+    const currentHull = feedbackRef.current.hullNormalized || [];
+    if (!currentHull[anchorIndex]) {
+      return;
+    }
+
+    const nextHull = currentHull.map((point, index) =>
+      index === anchorIndex ? normalizeHullPoint(nextPoint) : point
+    );
+    emitEditedOutline(nextHull);
+  }
+
+  function handleAnchorPointerDown(event, anchorIndex) {
+    if (event.button !== 0) {
+      return;
+    }
+
+    event.preventDefault();
+    event.stopPropagation();
+    draggedAnchorRef.current = {
+      anchorIndex,
+      pointerId: event.pointerId
+    };
+    event.currentTarget.setPointerCapture(event.pointerId);
+  }
+
+  function handleAnchorPointerMove(event) {
+    const active = draggedAnchorRef.current;
+    if (!active || active.pointerId !== event.pointerId) {
+      return;
+    }
+
+    event.preventDefault();
+    event.stopPropagation();
+    updateAnchor(active.anchorIndex, getNormalizedPointFromEvent(event));
+  }
+
+  function handleAnchorPointerUp(event) {
+    const active = draggedAnchorRef.current;
+    if (!active || active.pointerId !== event.pointerId) {
+      return;
+    }
+
+    event.preventDefault();
+    event.stopPropagation();
+    draggedAnchorRef.current = null;
+    event.currentTarget.releasePointerCapture(event.pointerId);
+  }
+
+  function handleAnchorKeyDown(event, anchorIndex) {
+    const keyOffsets = {
+      ArrowUp: { x: 0, y: -0.012 },
+      ArrowDown: { x: 0, y: 0.012 },
+      ArrowLeft: { x: -0.012, y: 0 },
+      ArrowRight: { x: 0.012, y: 0 }
+    };
+    const offset = keyOffsets[event.key];
+
+    if (!offset) {
+      return;
+    }
+
+    const currentPoint = feedbackRef.current.hullNormalized?.[anchorIndex];
+    if (!currentPoint) {
+      return;
+    }
+
+    event.preventDefault();
+    updateAnchor(anchorIndex, {
+      x: currentPoint.x + offset.x,
+      y: currentPoint.y + offset.y
+    });
+  }
+
+  const metrics = canvasMetricsRef.current;
+  const feedbackCopy = getFeedbackCopy(locale, feedback);
+  const outlinePoints = (feedback.hullNormalized || []).map((point) => ({
+    x: point.x * metrics.width,
+    y: point.y * metrics.height
+  }));
+  const outlinePath = outlinePoints.map((point) => `${point.x},${point.y}`).join(" ");
+  const controlStep = Math.max(1, Math.floor(outlinePoints.length / 12));
+  const controlPoints = outlinePoints
+    .map((point, index) => ({ ...point, anchorIndex: index }))
+    .filter((_, index) => index % controlStep === 0);
 
   return (
     <section
@@ -709,6 +1000,7 @@ export default function SketchPad({
           </h2>
         </div>
         <button className="ghost-button" onClick={clearCanvas} type="button">
+          <Icon name="delete" />
           {locale === "zh" ? "清空画板" : "Clear Sheet"}
         </button>
       </div>
@@ -728,6 +1020,84 @@ export default function SketchPad({
           onPointerUp={handlePointerUp}
           ref={canvasRef}
         />
+        {outlinePoints.length >= 3 ? (
+          <svg
+            aria-label={
+              locale === "zh"
+                ? "可拖动的桌面轮廓锚点"
+                : "Draggable tabletop outline anchors"
+            }
+            className="sketchpad__recognition"
+            ref={recognitionRef}
+            role="group"
+            viewBox={`0 0 ${metrics.width} ${metrics.height}`}
+          >
+            <defs>
+              <linearGradient
+                id={gradientIdRef.current}
+                x1="0%"
+                x2="100%"
+                y1="0%"
+                y2="100%"
+              >
+                <stop offset="0%" stopColor={fillStyle?.colorA || "#d9381e"} />
+                <stop offset="100%" stopColor={fillStyle?.colorB || fillStyle?.colorA || "#f2c5b7"} />
+              </linearGradient>
+            </defs>
+            <polygon
+              className="sketchpad__recognized-fill"
+              fill={
+                fillStyle?.mode === "gradient"
+                  ? `url(#${gradientIdRef.current})`
+                  : fillStyle?.mode === "solid"
+                    ? fillStyle?.colorA || "#d9381e"
+                    : undefined
+              }
+              points={outlinePath}
+            />
+            <polyline className="sketchpad__recognized-line" points={`${outlinePath} ${outlinePoints[0].x},${outlinePoints[0].y}`} />
+            {controlPoints.map((point, index) => (
+              <circle
+                aria-label={
+                  locale === "zh"
+                    ? `轮廓锚点 ${index + 1}`
+                    : `Outline anchor ${index + 1}`
+                }
+                className="sketchpad__control-point"
+                cx={point.x}
+                cy={point.y}
+                key={`${point.x}-${point.y}-${index}`}
+                onKeyDown={(event) => handleAnchorKeyDown(event, point.anchorIndex)}
+                onPointerCancel={handleAnchorPointerUp}
+                onPointerDown={(event) => handleAnchorPointerDown(event, point.anchorIndex)}
+                onPointerMove={handleAnchorPointerMove}
+                onPointerUp={handleAnchorPointerUp}
+                r="4.2"
+                role="button"
+                tabIndex="0"
+              />
+            ))}
+          </svg>
+        ) : null}
+        <div className={`sketchpad__feedback ${feedback.hasContent ? "is-ready" : ""}`}>
+          <strong>{feedbackCopy.title}</strong>
+          <span>{feedbackCopy.detail}</span>
+        </div>
+      </div>
+
+      <div className="sketchpad__analysis">
+        <div>
+          <span>{feedbackCopy.before}</span>
+          <strong>{feedback.pointCount || 0}</strong>
+        </div>
+        <div>
+          <span>{feedbackCopy.after}</span>
+          <strong>{feedback.hullPointCount || 0}</strong>
+        </div>
+        <div>
+          <span>{feedbackCopy.coverage}</span>
+          <strong>{formatPercent(feedback.coverage)}</strong>
+        </div>
       </div>
 
       <div className="sketchpad__toolbar">
@@ -743,6 +1113,59 @@ export default function SketchPad({
             />
           ))}
         </div>
+        <button className="ghost-button sketchpad__clear-button" onClick={clearCanvas} type="button">
+          <Icon name="delete" />
+          {locale === "zh" ? "清空画板" : "Clear Sheet"}
+        </button>
+        <div className="sketchpad__fill-controls">
+          <div className="segmented">
+            <button
+              className={`segmented__button ${fillStyle?.mode === "none" ? "is-active" : ""}`}
+              onClick={() => onFillStyleChange?.({ ...fillStyle, mode: "none" })}
+              type="button"
+            >
+              {locale === "zh" ? "关闭" : "Off"}
+            </button>
+            <button
+              className={`segmented__button ${fillStyle?.mode === "solid" ? "is-active" : ""}`}
+              onClick={() => onFillStyleChange?.({ ...fillStyle, mode: "solid" })}
+              type="button"
+            >
+              {locale === "zh" ? "纯色" : "Solid"}
+            </button>
+            <button
+              className={`segmented__button ${fillStyle?.mode === "gradient" ? "is-active" : ""}`}
+              onClick={() => onFillStyleChange?.({ ...fillStyle, mode: "gradient" })}
+              type="button"
+            >
+              {locale === "zh" ? "渐变" : "Gradient"}
+            </button>
+          </div>
+          <label className="sketchpad__fill-swatch">
+            <span className="panel__label">{locale === "zh" ? "颜色 A" : "Color A"}</span>
+            <input
+              className="color-input"
+              disabled={fillStyle?.mode === "none"}
+              onChange={(event) =>
+                onFillStyleChange?.({ ...fillStyle, colorA: event.target.value })
+              }
+              type="color"
+              value={fillStyle?.colorA || "#d9381e"}
+            />
+          </label>
+          <label className="sketchpad__fill-swatch">
+            <span className="panel__label">{locale === "zh" ? "颜色 B" : "Color B"}</span>
+            <input
+              className="color-input"
+              disabled={fillStyle?.mode !== "gradient"}
+              onChange={(event) =>
+                onFillStyleChange?.({ ...fillStyle, colorB: event.target.value })
+              }
+              type="color"
+              value={fillStyle?.colorB || "#f2c5b7"}
+            />
+          </label>
+        </div>
         <label className="sketchpad__size">
           <span className="panel__label">{locale === "zh" ? "画笔" : "Brush"}</span>
           <input
@@ -751,6 +1174,7 @@ export default function SketchPad({
             min="4"
             onChange={(event) => setBrushSize(Number(event.target.value))}
             step="1"
+            style={{ "--slider-value": `${((brushSize - 4) / 22) * 100}%` }}
             type="range"
             value={brushSize}
           />

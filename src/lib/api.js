@@ -90,24 +90,6 @@ export async function requestSketchDesign(
   });
 }
 
-export async function requestGhBridgePreview(config) {
-  const response = await fetch("/api/gh-bridge/generate", {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json"
-    },
-    body: JSON.stringify({ config })
-  });
-
-  const payload = await response.json().catch(() => ({}));
-
-  if (!response.ok) {
-    throw new Error(payload.error || "Grasshopper bridge request failed.");
-  }
-
-  return payload;
-}
-
 export async function requestQuoteSceneGeneration({
   locale,
   sceneKey,

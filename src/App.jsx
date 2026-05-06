@@ -1,15 +1,17 @@
 ﻿import { useEffect, useMemo, useRef, useState } from "react";
+import BrandLogo from "./components/BrandLogo";
 import ChatDock from "./components/ChatDock";
 import ControlPanel from "./components/ControlPanel";
 import DraftDrawer from "./components/DraftDrawer";
 import GalleryPage from "./components/GalleryPage";
+import Icon from "./components/Icon";
 import LandingView from "./components/LandingView";
 import PartEditorOverlay from "./components/PartEditorOverlay";
 import ProfilePage from "./components/ProfilePage";
 import QuotePage from "./components/QuotePage";
 import SketchPad from "./components/SketchPad";
 import TableViewport from "./components/TableViewport";
-import { requestAiDesign, requestGhBridgePreview } from "./lib/api";
+import { requestAiDesign } from "./lib/api";
 import {
   DEFAULT_CONFIG,
   SCENARIO_PRESETS,
@@ -105,6 +107,7 @@ const CONFIG_KEYS = [
   "height",
   "material",
   "patternMode",
+  "finishColor",
   "moduleSize",
   "moduleGap",
   "moduleThicknessScale",
@@ -137,10 +140,8 @@ function hasConfigDelta(nextConfig, currentConfig) {
   return CONFIG_KEYS.some((key) => nextConfig?.[key] !== currentConfig?.[key]);
 }
 
-function buildDesignContext(patternAsset, sketchSnapshot) {
+function buildDesignContext(sketchSnapshot) {
   return {
-    hasUploadedPattern: Boolean(patternAsset?.dataUrl),
-    uploadedPatternName: patternAsset?.name || "",
     hasSketchOutline: Boolean(sketchSnapshot?.hasContent),
     sketchPointCount: sketchSnapshot?.pointCount || 0
   };
@@ -189,13 +190,12 @@ function buildSketchSilhouettePatch(snapshot, currentConfig) {
   };
 }
 
-function createDraft(config, patternAsset, sketchSnapshot, locale) {
+function createDraft(config, sketchSnapshot, locale) {
   return {
     id: crypto.randomUUID(),
     label: getLocalizedDraftLabel(config, locale),
     createdAt: new Date().toISOString(),
     config,
-    patternAsset,
     sketchAsset: sketchSnapshot?.hasContent
       ? {
           hasContent: true,
@@ -489,6 +489,25 @@ function getDefaultPartOverride(partKind) {
       tint: "#6e675f",
       moduleSizeScale: 1,
       thicknessScale: 1
+    };
+  }
+
+  if (partKind === "frame") {
+    return {
+      materialKey: DEFAULT_PART_MATERIALS.tabletop,
+      tint: "#c8b49a",
+      widthScale: 1,
+      depthScale: 1
+    };
+  }
+
+  if (partKind === "legs") {
+    return {
+      materialKey: DEFAULT_PART_MATERIALS.legs,
+      tint: "#5f6267",
+      widthScale: 1,
+      depthScale: 1,
+      lengthScale: 1
     };
   }
 
@@ -824,10 +843,10 @@ export default function App() {
   const [galleryUploads, setGalleryUploads] = useState(() => loadGalleryUploads());
   const [tradeInLeads, setTradeInLeads] = useState(() => loadTradeInLeads());
   const [draftDrawerOpen, setDraftDrawerOpen] = useState(false);
+  const [controlsCollapsed, setControlsCollapsed] = useState(false);
   const [busy, setBusy] = useState(false);
   const [status, setStatus] = useState("");
   const [aiNote, setAiNote] = useState("");
-  const [patternAsset, setPatternAsset] = useState(null);
   const [serverState, setServerState] = useState({
     ready: false,
     providerLabel: "OpenAI",
@@ -846,24 +865,27 @@ export default function App() {
   const [activeVariantId, setActiveVariantId] = useState("");
   const [selectedPart, setSelectedPart] = useState(null);
   const [partOverrides, setPartOverrides] = useState({});
-  const [rhinoBridgeState, setRhinoBridgeState] = useState({
-    busy: false,
-    message: ""
+  const [materialTarget, setMaterialTarget] = useState("tabletop");
+  const [sketchFill, setSketchFill] = useState({
+    mode: "none",
+    colorA: "#d9381e",
+    colorB: "#f2c5b7"
   });
-  const [ghPreviewMesh, setGhPreviewMesh] = useState(null);
   const configRef = useRef(config);
 
-  function invalidateGhPreviewMesh(reason = "") {
-    setGhPreviewMesh(null);
-    setRhinoBridgeState((current) =>
-      current.busy
-        ? current
-        : {
-            ...current,
-            message: reason
-          }
-    );
-  }
+  useEffect(() => {
+    const frameId = window.requestAnimationFrame(() => {
+      window.scrollTo(0, 0);
+      document
+        .querySelectorAll(".market-page, .quote-page, .panel")
+        .forEach((element) => {
+          element.scrollTop = 0;
+        });
+      window.dispatchEvent(new Event("resize"));
+    });
+
+    return () => window.cancelAnimationFrame(frameId);
+  }, [phase]);
 
   useEffect(() => {
     configRef.current = config;
@@ -925,17 +947,12 @@ export default function App() {
   }, []);
 
   function updateConfig(patch) {
-    invalidateGhPreviewMesh(
-      "Back to web preview. Send to GH again to refresh."
-    );
     setConfig((current) =>
       normalizeConfig({
         ...current,
         ...patch,
-        finishColor:
-          Object.prototype.hasOwnProperty.call(patch, "material")
-            ? ""
-            : current.finishColor
+        patternMode: "metal",
+        finishColor: Object.prototype.hasOwnProperty.call(patch, "material") ? "" : current.finishColor
       })
     );
   }
@@ -946,12 +963,9 @@ export default function App() {
     const nextConfig = normalizeConfig({
       ...current,
       ...patch,
+      patternMode: "metal",
       finishColor: options.finishColor ?? current.finishColor
     });
-
-    invalidateGhPreviewMesh(
-      "Config updated. Send to GH again to refresh the model."
-    );
     setConfig(nextConfig);
     setAiNote(result.rationale || "");
     setAssistantUnderstanding(
@@ -998,15 +1012,25 @@ export default function App() {
     setStatus("");
   }
 
+  function openPhase(nextPhase) {
+    if (phase === "configurator" && (nextPhase === "gallery" || nextPhase === "quote")) {
+      setPhase("profile");
+      window.setTimeout(() => setPhase(nextPhase), 80);
+      return;
+    }
+
+    setPhase(nextPhase);
+  }
+
   function handleGoQuote() {
     setDraftDrawerOpen(false);
-    setPhase("quote");
+    openPhase("quote");
     setStatus("Quote page opened.");
   }
 
   function handleGoGallery() {
     setDraftDrawerOpen(false);
-    setPhase("gallery");
+    openPhase("gallery");
     setStatus(locale === "zh" ? "\u5df2\u6253\u5f00 Gallery\u3002" : "Gallery opened.");
   }
 
@@ -1048,20 +1072,22 @@ export default function App() {
       const existing = current.find((entry) => entry.galleryItemId === item.id);
 
       if (existing) {
-        return current.map((entry) =>
-          entry.galleryItemId === item.id
-            ? {
-                ...entry,
-                qty: entry.qty + 1
-              }
-            : entry
-        );
+        return current.filter((entry) => entry.galleryItemId !== item.id);
       }
 
       return [nextItem, ...current];
     });
 
-    setStatus(locale === "zh" ? "\u5df2\u52a0\u5165\u8d2d\u7269\u8f66\u3002" : "Added to cart.");
+    const alreadyInCart = cart.some((entry) => entry.galleryItemId === item.id);
+    setStatus(
+      locale === "zh"
+        ? alreadyInCart
+          ? "已移出购物车。"
+          : "已加入购物车。"
+        : alreadyInCart
+          ? "Removed from cart."
+          : "Added to cart."
+    );
   }
 
   function handleRemoveCartItem(cartItemId) {
@@ -1135,10 +1161,9 @@ export default function App() {
   }
 
   function handleTabletopTintChange(tint) {
-    invalidateGhPreviewMesh(
-      "Tabletop color updated. Send to GH again to refresh."
+    setConfig((current) =>
+      normalizeConfig({ ...current, finishColor: tint, patternMode: "metal" })
     );
-    setConfig((current) => normalizeConfig({ ...current, finishColor: tint }));
     setPartOverrides((current) => ({
       ...current,
       tabletop: {
@@ -1149,9 +1174,6 @@ export default function App() {
   }
 
   function handleLegTintChange(tint) {
-    invalidateGhPreviewMesh(
-      "Leg color updated. Send to GH again to refresh."
-    );
     setPartOverrides((current) => {
       const next = { ...current };
 
@@ -1168,9 +1190,6 @@ export default function App() {
   }
 
   function handleModuleTintChange(tint) {
-    invalidateGhPreviewMesh(
-      "Module color updated. Send to GH again to refresh."
-    );
     setPartOverrides((current) => ({
       ...current,
       modules: {
@@ -1180,20 +1199,67 @@ export default function App() {
     }));
   }
 
+  function handleFrameTintChange(tint) {
+    setPartOverrides((current) => ({
+      ...current,
+      frame: {
+        ...(current.frame || getDefaultPartOverride("frame")),
+        tint
+      }
+    }));
+  }
+
+  function getMaterialTargetValue(target) {
+    if (target === "modules") {
+      return partOverrides.modules?.materialKey || config.material;
+    }
+
+    if (target === "frame") {
+      return partOverrides.frame?.materialKey || config.material;
+    }
+
+    if (target === "legs") {
+      return partOverrides.legs?.materialKey || partOverrides["leg-1"]?.materialKey || config.material;
+    }
+
+    return partOverrides.tabletop?.materialKey || config.material;
+  }
+
+  function handleMaterialTargetMaterialChange(materialKey) {
+    if (materialTarget === "legs") {
+      setPartOverrides((current) => ({
+        ...current,
+        legs: {
+          ...(current.legs || getDefaultPartOverride("legs")),
+          materialKey
+        }
+      }));
+      return;
+    }
+
+    setPartOverrides((current) => ({
+      ...current,
+      [materialTarget]: {
+        ...(current[materialTarget] || getDefaultPartOverride(materialTarget)),
+        materialKey
+      }
+    }));
+
+    if (materialTarget === "tabletop") {
+      setConfig((current) => normalizeConfig({ ...current, material: materialKey }));
+    }
+  }
+
   function handleSaveDraft() {
-    const nextDraft = createDraft(config, patternAsset, sketchSnapshot, locale);
+    const nextDraft = createDraft(config, sketchSnapshot, locale);
     setDrafts((current) => [nextDraft, ...current].slice(0, 8));
     setStatus(t(locale, "status.draftSaved", { label: nextDraft.label }));
     setDraftDrawerOpen(true);
   }
 
   function handleSelectDraft(draft) {
-    const nextConfig = normalizeConfig(draft.config);
-    invalidateGhPreviewMesh(
-      "Draft restored. Send to GH again to refresh the model."
-    );
+    const nextConfig = normalizeConfig({ ...draft.config, patternMode: "metal" });
     setConfig(nextConfig);
-    setPatternAsset(draft.patternAsset ?? null);
     setSketchSnapshot((current) => ({
       ...EMPTY_SKETCH,
       version: current.version + 1,
@@ -1225,11 +1291,6 @@ export default function App() {
       setAssistantUnderstanding((current) =>
         current.summary ? current : EMPTY_UNDERSTANDING
       );
-      invalidateGhPreviewMesh(
-        locale === "zh"
-          ? "草图已清空，已回到网页基础预览。"
-          : "Sketch cleared. Back to the base web preview."
-      );
       setConfig((current) =>
         current.silhouetteMode === "sketch"
           ? normalizeConfig({ ...current, silhouetteMode: "shape" })
@@ -1239,60 +1300,21 @@ export default function App() {
     }
 
     setSketchState({
-      label: locale === "zh" ? "草图正在同步桌面轮廓" : "Sketch is driving the tabletop outline",
+      label:
+        locale === "zh"
+          ? `已识别 ${snapshot.hullPointCount || 0} 个轮廓控制点`
+          : `${snapshot.hullPointCount || 0} outline control points recognized`,
       detail:
         locale === "zh"
-          ? "右侧模型会根据画板轮廓实时变形，桌腿会跟随新桌面边界重新落位。"
-          : "The right model now follows the sketch silhouette and repositions legs to the new tabletop."
+          ? `原始 ${snapshot.pointCount || 0} 个笔触点正在重建桌面边界，桌腿会跟随新边界重新落位。`
+          : `${snapshot.pointCount || 0} raw stroke points are rebuilding the tabletop boundary; legs follow the new edge.`
     });
-    invalidateGhPreviewMesh(
-      "Sketch changed. Send to GH again to refresh the model."
-    );
     setConfig((current) =>
       normalizeConfig({
         ...current,
         ...buildSketchSilhouettePatch(snapshot, current)
       })
     );
-  }
-
-  async function handlePatternUpload(file) {
-    if (!file) {
-      return;
-    }
-
-    setBusy(true);
-    setStatus(t(locale, "status.motifPreparing"));
-
-    try {
-      const asset = await resizeImageFile(file);
-      setPatternAsset(asset);
-      invalidateGhPreviewMesh(
-        "Motif updated. Send to GH again to refresh the model."
-      );
-      setConfig((current) =>
-        normalizeConfig({
-          ...current,
-          patternMode: "uploaded"
-        })
-      );
-      setStatus(t(locale, "status.motifLinked", { name: asset.name }));
-    } catch (error) {
-      setStatus(
-        error instanceof Error ? error.message : "The uploaded image could not be processed."
-      );
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  function handleClearPattern() {
-    setPatternAsset(null);
-    invalidateGhPreviewMesh(
-      "Motif removed. Back to web preview."
-    );
-    setConfig((current) => normalizeConfig({ ...current, patternMode: "metal" }));
-    setStatus(t(locale, "status.motifRemoved"));
   }
 
   async function handleGenerateDirections(prompt) {
@@ -1324,11 +1346,11 @@ export default function App() {
       }
 
       const result = await requestAiDesign(
-        trimmed ||
+          trimmed ||
           "Use the current sketch and configuration to generate the next best three table directions.",
         configRef.current,
         {
-          designContext: buildDesignContext(patternAsset, sketchSnapshot),
+          designContext: buildDesignContext(sketchSnapshot),
           sketchDataUrl: sketchSnapshot.hasContent ? sketchSnapshot.dataUrl : "",
           sketchMetadata: buildSketchMetadata(sketchSnapshot),
           locks: designLocks,
@@ -1396,51 +1418,8 @@ export default function App() {
     }
   }
 
-  async function handleSendToRhino() {
-    setRhinoBridgeState({
-      busy: true,
-      message: "Request written. Waiting for Grasshopper..."
-    });
-    setStatus("Waiting for Rhino / GH...");
-
-    try {
-      const result = await requestGhBridgePreview(configRef.current);
-      const moduleCount = result?.summary?.moduleCount ?? result?.moduleCount ?? 0;
-      const connectorCount = result?.summary?.connectorCount ?? result?.connectorCount ?? 0;
-      const previewMesh = result?.preview?.mesh || null;
-      const vertexCount = Array.isArray(previewMesh?.vertices)
-        ? previewMesh.vertices.length
-        : 0;
-      const faceCount = Array.isArray(previewMesh?.faces) ? previewMesh.faces.length : 0;
-      const message =
-        locale === "zh"
-          ? `GH 已返回 ${moduleCount} 个模块、${connectorCount} 个连接件，预览网格${previewMesh ? `可用（${vertexCount} 顶点 / ${faceCount} 面）` : "缺失"}。`
-          : `GH returned ${moduleCount} modules, ${connectorCount} connectors, and a preview mesh ${previewMesh ? `(${vertexCount} vertices / ${faceCount} faces)` : "(missing)"}.`;
-
-      setGhPreviewMesh(previewMesh);
-      setRhinoBridgeState({
-        busy: false,
-        message
-      });
-      setStatus(message);
-    } catch (error) {
-      const message =
-        error instanceof Error
-          ? error.message
-          : "Grasshopper bridge request failed.";
-      setRhinoBridgeState({
-        busy: false,
-        message
-      });
-      setStatus(message);
-    }
-  }
-
   function handleApplyVariant(variant) {
-    invalidateGhPreviewMesh(
-      "Variant changed. Send to GH again to refresh the model."
-    );
-    setConfig(variant.config);
+    setConfig(normalizeConfig({ ...variant.config, patternMode: "metal" }));
     setActiveVariantId(variant.id);
     setAiNote(variant.rationale || variant.summary);
     setStatus(`${variant.title} is now active.`);
@@ -1621,15 +1600,11 @@ export default function App() {
     }
 
     if (Object.keys(tableShapePatch).length) {
-      invalidateGhPreviewMesh(
-        locale === "zh"
-          ? "桌面轮廓已更新；如果你还需要同步 GH 模型，请再发送一次。"
-          : "Tabletop silhouette updated. Send to GH again if you need a synced GH model."
-      );
       setConfig((current) =>
         normalizeConfig({
           ...current,
-          ...tableShapePatch
+          ...tableShapePatch,
+          patternMode: "metal"
         })
       );
     }
@@ -1645,15 +1620,18 @@ export default function App() {
 
   const sceneTheme =
     SCENARIO_PRESETS[config.scenario] ?? SCENARIO_PRESETS.daylight;
-  const sketchMaskDataUrl = sketchSnapshot.hasContent
-    ? sketchSnapshot.maskDataUrl
-    : "";
+  const sketchMaskDataUrl = "";
   const sketchOutline = sketchSnapshot.hullNormalized || [];
   const tabletopTint =
     partOverrides.tabletop?.tint || getDefaultPartOverride("tabletop").tint;
+  const frameTint = partOverrides.frame?.tint || getDefaultPartOverride("frame").tint;
   const moduleTint =
     partOverrides.modules?.tint || getDefaultPartOverride("modules").tint;
-  const legTint = partOverrides["leg-1"]?.tint || getDefaultPartOverride("leg").tint;
+  const legTint =
+    partOverrides.legs?.tint ||
+    partOverrides["leg-1"]?.tint ||
+    getDefaultPartOverride("leg").tint;
+  const currentTargetMaterial = getMaterialTargetValue(materialTarget);
   const studioCopy = getStudioCopy(locale);
   const sizeLabel = `${config.width.toFixed(2)} x ${config.depth.toFixed(2)} x ${config.height.toFixed(2)} m`;
 
@@ -1666,7 +1644,11 @@ export default function App() {
       }}
     >
       {phase === "configurator" ? (
-        <div className={`app__workspace ${phase === "configurator" ? "is-active" : ""}`}>
+        <div
+          className={`app__workspace ${phase === "configurator" ? "is-active" : ""} ${
+            controlsCollapsed ? "is-controls-collapsed" : ""
+          }`}
+        >
           <aside className="workspace__rail">
             <section className="workspace__controls">
               <ControlPanel
@@ -1679,24 +1661,39 @@ export default function App() {
                 onGoHome={handleGoHome}
                 onGoProfile={handleGoProfile}
                 onGoQuote={handleGoQuote}
+                onFrameTintChange={handleFrameTintChange}
                 onLegTintChange={handleLegTintChange}
                 onLocaleChange={setLocale}
+                onMaterialTargetChange={setMaterialTarget}
+                onMaterialTargetMaterialChange={handleMaterialTargetMaterialChange}
                 onModuleTintChange={handleModuleTintChange}
                 onOpenDrafts={() => setDraftDrawerOpen(true)}
                 onSaveDraft={handleSaveDraft}
                 onTabletopTintChange={handleTabletopTintChange}
+                currentTargetMaterial={currentTargetMaterial}
+                frameTint={frameTint}
+                materialTarget={materialTarget}
                 sketchHasContent={sketchSnapshot.hasContent}
                 moduleTint={moduleTint}
                 tabletopTint={tabletopTint}
               />
             </section>
           </aside>
+          <button
+            aria-expanded={!controlsCollapsed}
+            className="controls-toggle workspace__rail-toggle"
+            onClick={() => setControlsCollapsed((current) => !current)}
+            type="button"
+          >
+            {controlsCollapsed ? ">>" : "<<"}
+          </button>
 
           <section className="workspace__pane workspace__pane--preview">
             {phase === "configurator" ? (
               <div className="preview-shell">
                 <header className="preview-shell__header">
                   <div className="preview-shell__copy">
+                    <BrandLogo className="brand-lockup--workspace" label="Table Generator" compact />
                     <p className="panel__label">{studioCopy.eyebrow}</p>
                     <h1 className="panel__title">{studioCopy.title}</h1>
                     <p className="panel__lead">{studioCopy.note}</p>
@@ -1709,6 +1706,16 @@ export default function App() {
                     </span>
                     <span className="status-chip">
                       {getLocalizedOptionLabel(locale, "material", config.material)}
+                    </span>
+                    <span className={`network-chip ${serverState.ready ? "is-ready" : "is-offline"}`}>
+                      <span className="network-chip__dot" />
+                      {serverState.ready
+                        ? locale === "zh"
+                          ? `${serverState.providerLabel} 在线`
+                          : `${serverState.providerLabel} Online`
+                        : locale === "zh"
+                          ? "AI 离线"
+                          : "AI Offline"}
                     </span>
                   </div>
                 </header>
@@ -1725,18 +1732,21 @@ export default function App() {
                       <div className="sketch-board__underlay">
                         <TableViewport
                           config={config}
-                          ghPreviewMesh={ghPreviewMesh}
+                          ghPreviewMesh={null}
                           interactive={false}
-                          patternAsset={patternAsset}
+                          patternAsset={null}
                           phase="configurator"
                           partOverrides={partOverrides}
+                          surfaceFill={sketchFill}
                           sketchMaskDataUrl={sketchMaskDataUrl}
                           sketchOutline={sketchOutline}
                         />
                       </div>
                       <div className="sketch-board__pad">
                         <SketchPad
+                          fillStyle={sketchFill}
                           locale={locale}
+                          onFillStyleChange={setSketchFill}
                           onSketchChange={handleSketchChange}
                           syncDetail={sketchState.detail}
                           syncLabel={sketchState.label}
@@ -1758,13 +1768,14 @@ export default function App() {
                       <div className="render-stage">
                         <TableViewport
                           config={config}
-                          ghPreviewMesh={ghPreviewMesh}
+                          ghPreviewMesh={null}
                           onSelectPart={handleSelectPart}
-                          patternAsset={patternAsset}
+                          patternAsset={null}
                           phase="configurator"
                           partOverrides={partOverrides}
                           selectedPartId={selectedPart?.id || ""}
-                          sketchMaskDataUrl={sketchMaskDataUrl}
+                          surfaceFill={sketchFill}
+                          sketchMaskDataUrl=""
                           sketchOutline={sketchOutline}
                         />
                         <PartEditorOverlay
@@ -1791,11 +1802,12 @@ export default function App() {
               <div className="preview-stage">
                 <TableViewport
                   config={config}
-                  ghPreviewMesh={ghPreviewMesh}
+                  ghPreviewMesh={null}
                   interactive={false}
-                  patternAsset={patternAsset}
+                  patternAsset={null}
                   phase={phase}
                   partOverrides={partOverrides}
+                  surfaceFill={sketchFill}
                   sketchMaskDataUrl={sketchMaskDataUrl}
                   sketchOutline={sketchOutline}
                 />
@@ -1843,13 +1855,14 @@ export default function App() {
       <QuotePage
         config={config}
         draftsCount={drafts.length}
-        ghPreviewMesh={ghPreviewMesh}
+        ghPreviewMesh={null}
         locale={locale}
         onBack={() => setPhase("configurator")}
         onHome={handleGoHome}
         onOpenDrafts={() => setDraftDrawerOpen(true)}
         partOverrides={partOverrides}
-        patternAsset={patternAsset}
+        patternAsset={null}
+        surfaceFill={sketchFill}
         sketchMaskDataUrl={sketchMaskDataUrl}
         sketchOutline={sketchOutline}
         visible={phase === "quote"}
@@ -1859,6 +1872,8 @@ export default function App() {
         locale={locale}
         onEnter={handleEnter}
         onLocaleChange={setLocale}
+        serverProviderLabel={serverState.providerLabel}
+        serverReady={serverState.ready}
         visible={phase === "landing"}
       />
 
@@ -1872,9 +1887,7 @@ export default function App() {
         onApplyLocalEdit={handleApplyLocalEdit}
         onApplyVariant={handleApplyVariant}
         onGenerateDirections={handleGenerateDirections}
-        onSendToRhino={handleSendToRhino}
         onToggleLock={handleToggleLock}
-        rhinoBridgeState={rhinoBridgeState}
         serverModel={serverState.model}
         serverProviderLabel={serverState.providerLabel}
         serverReady={serverState.ready}

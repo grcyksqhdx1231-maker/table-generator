@@ -43,18 +43,26 @@ export function saveDrafts(drafts) {
 }
 
 export function loadProfile() {
-  return loadJson(STORAGE_KEYS.profile, {
+  const parsed = loadJson(STORAGE_KEYS.profile, {
     name: "",
-    account: "",
-    password: "",
-    email: "",
-    address: "",
-    phone: ""
+    account: ""
   });
+
+  const {
+    name = "",
+    account = ""
+  } = parsed || {};
+
+  return { name, account };
 }
 
 export function saveProfile(profile) {
-  saveJson(STORAGE_KEYS.profile, profile);
+  const {
+    name = "",
+    account = ""
+  } = profile || {};
+
+  saveJson(STORAGE_KEYS.profile, { name, account });
 }
 
 export function loadFavorites() {

@@ -1,4 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
+import BrandLogo from "./BrandLogo";
+import EmptyState from "./EmptyState";
+import Icon from "./Icon";
 import { getLocalizedOptionLabel } from "../lib/i18n";
 import { evaluateTradeIn } from "../lib/marketplace";
 
@@ -18,18 +21,16 @@ function getCopy(locale) {
       gallery: "Gallery",
       eyebrow: "个人主页",
       title: "账户 / 收藏 / 购物车 / 以旧换新",
-      note: "这里先做成前端演示：个人资料本地保存，收藏与购物车联动，换新给出演示估值。",
+      note: "这里保留收藏、购物车和换新记录；联系方式与地址只在真实下单确认时填写，不写入本地缓存。",
       save: "保存资料",
-      account: "注册信息",
+      account: "公开资料",
+      safetyTitle: "隐私说明",
+      safetyNote: "本页不保存密码、电话或常住地址，避免把敏感信息长期留在浏览器里。",
       favorites: "收藏夹",
       cart: "购物车",
       tradein: "以旧换新",
       name: "姓名",
-      accountField: "账号",
-      password: "密码",
-      email: "邮箱",
-      address: "常住地址",
-      phone: "电话",
+      accountField: "展示账号",
       emptyFavorites: "还没有收藏任何桌子",
       emptyCart: "购物车还是空的",
       qty: "数量",
@@ -59,18 +60,16 @@ function getCopy(locale) {
     gallery: "Gallery",
     eyebrow: "Profile",
     title: "Account / Favorites / Cart / Trade-In",
-    note: "This is a frontend demo for local profile storage, synced favorites and cart, plus a mock trade-in evaluator.",
+    note: "Favorites, cart, and trade-in records stay here; contact and address details are only collected at real checkout.",
     save: "Save Profile",
-    account: "Registration",
+    account: "Public Profile",
+    safetyTitle: "Privacy Note",
+    safetyNote: "This page does not store passwords, phone numbers, or home addresses in browser storage.",
     favorites: "Favorites",
     cart: "Cart",
     tradein: "Trade-In",
     name: "Name",
-    accountField: "Account",
-    password: "Password",
-    email: "Email",
-    address: "Address",
-    phone: "Phone",
+    accountField: "Display Account",
     emptyFavorites: "No favorite tables yet",
     emptyCart: "Cart is empty",
     qty: "Qty",
@@ -154,9 +153,24 @@ export default function ProfilePage({
   return (
     <section className="market-page profile-page">
       <div className="market-nav">
-        <button className="ghost-button" onClick={onBack} type="button">{copy.back}</button>
-        <button className="ghost-button" onClick={onOpenGallery} type="button">{copy.gallery}</button>
-        <button className="ghost-button" onClick={onHome} type="button">{copy.home}</button>
+        <div className="market-nav__brand">
+          <BrandLogo className="brand-lockup--nav" label="Table Generator" compact />
+          <span>{copy.eyebrow}</span>
+        </div>
+        <div className="market-nav__actions">
+          <button className="ghost-button" onClick={onBack} type="button">
+            <Icon name="back" />
+            {copy.back}
+          </button>
+          <button className="ghost-button" onClick={onOpenGallery} type="button">
+            <Icon name="gallery" />
+            {copy.gallery}
+          </button>
+          <button className="ghost-button" onClick={onHome} type="button">
+            <Icon name="home" />
+            {copy.home}
+          </button>
+        </div>
       </div>
 
       <div className="market-page__body">
@@ -183,7 +197,7 @@ export default function ProfilePage({
         </section>
 
         <div className="profile-grid">
-          <section className="market-section">
+          <section className="market-section profile-section profile-section--account">
             <div className="panel__section-head">
               <div>
                 <p className="panel__label">{copy.eyebrow}</p>
@@ -201,37 +215,20 @@ export default function ProfilePage({
                 onChange={(account) => setDraftProfile((current) => ({ ...current, account }))}
                 value={draftProfile.account}
               />
-              <ProfileField
-                label={copy.password}
-                onChange={(password) => setDraftProfile((current) => ({ ...current, password }))}
-                type="password"
-                value={draftProfile.password}
-              />
-              <ProfileField
-                label={copy.email}
-                onChange={(email) => setDraftProfile((current) => ({ ...current, email }))}
-                type="email"
-                value={draftProfile.email}
-              />
-              <ProfileField
-                label={copy.address}
-                onChange={(address) => setDraftProfile((current) => ({ ...current, address }))}
-                value={draftProfile.address}
-              />
-              <ProfileField
-                label={copy.phone}
-                onChange={(phone) => setDraftProfile((current) => ({ ...current, phone }))}
-                value={draftProfile.phone}
-              />
+              <div className="profile-safety-note">
+                <p className="panel__label">{copy.safetyTitle}</p>
+                <strong>{copy.safetyNote}</strong>
+              </div>
             </div>
             <div className="panel__actions">
               <button className="primary-button" onClick={() => onSaveProfile(draftProfile)} type="button">
+                <Icon name="save" />
                 {copy.save}
               </button>
             </div>
           </section>
 
-          <section className="market-section">
+          <section className="market-section profile-section profile-section--favorites">
             <div className="panel__section-head">
               <div>
                 <p className="panel__label">{copy.favorites}</p>
@@ -256,9 +253,11 @@ export default function ProfilePage({
                       </p>
                       <div className="panel__actions panel__actions--wrap">
                         <button className="ghost-button" onClick={() => onToggleFavorite(item.id)} type="button">
+                          <Icon name="delete" />
                           {copy.remove}
                         </button>
                         <button className="primary-button" onClick={() => onAddToCart(item)} type="button">
+                          <Icon name="cart" />
                           {copy.addCart}
                         </button>
                       </div>
@@ -267,11 +266,17 @@ export default function ProfilePage({
                 ))}
               </div>
             ) : (
-              <p className="panel__note">{copy.emptyFavorites}</p>
+              <EmptyState
+                compact
+                detail={copy.emptyFavorites}
+                locale={locale}
+                title={copy.favorites}
+                variant="favorites"
+              />
             )}
           </section>
 
-          <section className="market-section">
+          <section className="market-section profile-section profile-section--cart">
             <div className="panel__section-head">
               <div>
                 <p className="panel__label">{copy.cart}</p>
@@ -295,10 +300,15 @@ export default function ProfilePage({
                       <p className="panel__note">{formatMoney(item.estimate.total, locale)}</p>
                       <div className="cart-item__controls">
                         <span className="panel__label">{copy.qty}</span>
-                        <button className="ghost-button" onClick={() => onUpdateCartQty(item.id, item.qty - 1)} type="button">-</button>
+                        <button className="ghost-button" onClick={() => onUpdateCartQty(item.id, item.qty - 1)} type="button">
+                          <Icon name="minus" />
+                        </button>
                         <span className="status-chip">{item.qty}</span>
-                        <button className="ghost-button" onClick={() => onUpdateCartQty(item.id, item.qty + 1)} type="button">+</button>
+                        <button className="ghost-button" onClick={() => onUpdateCartQty(item.id, item.qty + 1)} type="button">
+                          <Icon name="plus" />
+                        </button>
                         <button className="ghost-button" onClick={() => onRemoveCartItem(item.id)} type="button">
+                          <Icon name="delete" />
                           {copy.remove}
                         </button>
                       </div>
@@ -307,11 +317,17 @@ export default function ProfilePage({
                 ))}
               </div>
             ) : (
-              <p className="panel__note">{copy.emptyCart}</p>
+              <EmptyState
+                compact
+                detail={copy.emptyCart}
+                locale={locale}
+                title={copy.cart}
+                variant="cart"
+              />
             )}
           </section>
 
-          <section className="market-section">
+          <section className="market-section profile-section profile-section--tradein">
             <div className="panel__section-head">
               <div>
                 <p className="panel__label">{copy.tradein}</p>
@@ -371,6 +387,7 @@ export default function ProfilePage({
                 }
                 type="button"
               >
+                <Icon name="quote" />
                 {copy.evaluate}
               </button>
             </div>

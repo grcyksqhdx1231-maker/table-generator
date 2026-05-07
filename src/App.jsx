@@ -20,7 +20,6 @@ import {
 import { getLocalizedDraftLabel, getLocalizedOptionLabel, t } from "./lib/i18n";
 import {
   buildCartItemFromGalleryItem,
-  createGallerySeriesFromSource,
   createGalleryUploadFromSource,
   GALLERY_SEEDS
 } from "./lib/marketplace";
@@ -833,6 +832,7 @@ function buildScopedLocalEditResult(
 }
 
 export default function App() {
+  const galleryCaptureRef = useRef(null);
   const [locale, setLocale] = useState("zh");
   const [phase, setPhase] = useState("landing");
   const [config, setConfig] = useState(DEFAULT_CONFIG);
@@ -1114,20 +1114,33 @@ export default function App() {
   }
 
   function handleUploadCurrentDesignToGallery() {
-    const series = createGallerySeriesFromSource({
-      baseId: crypto.randomUUID(),
-      config: configRef.current,
-      label: getLocalizedDraftLabel(configRef.current, locale),
+    const currentConfig = configRef.current;
+    const imageUrl =
+      galleryCaptureRef.current?.captureImage?.("image/jpeg", 0.92) || "";
+    const dominantTint =
+      partOverrides.modules?.tint ||
+      currentConfig.finishColor ||
+      partOverrides.tabletop?.tint ||
+      sketchFill.colorA ||
+      "";
+    const colorFamily = inferColorFamilyFromTint(dominantTint, currentConfig.material);
+    const upload = createGalleryUploadFromSource({
+      id: crypto.randomUUID(),
+      config: currentConfig,
+      imageUrl,
+      label: getLocalizedDraftLabel(currentConfig, locale),
+      material: currentConfig.material,
+      colorFamily,
       sourceLabelZh: "\u6765\u81ea\u5f53\u524d\u914d\u7f6e",
       sourceLabelEn: "From current configuration"
     });
 
-    setGalleryUploads((current) => [...series, ...current].slice(0, 84));
+    setGalleryUploads((current) => [upload, ...current].slice(0, 84));
     setPhase("gallery");
     setStatus(
       locale === "zh"
-        ? "\u5df2\u751f\u6210\u5f53\u524d\u65b9\u6848\u7684 7 \u8272\u7cfb\u5217\u3002"
-        : "Generated a 7-color series from the current design."
+        ? "\u5df2\u751f\u6210\u5f53\u524d\u65b9\u6848\u7684\u5b9e\u65f6 Gallery \u6548\u679c\u56fe\u3002"
+        : "Generated a live Gallery preview from the current design."
     );
   }
 
@@ -1770,11 +1783,12 @@ export default function App() {
                           config={config}
                           ghPreviewMesh={null}
                           onSelectPart={handleSelectPart}
-                          patternAsset={null}
-                          phase="configurator"
-                          partOverrides={partOverrides}
-                          selectedPartId={selectedPart?.id || ""}
-                          surfaceFill={sketchFill}
+      patternAsset={null}
+      phase="configurator"
+      ref={galleryCaptureRef}
+      partOverrides={partOverrides}
+      selectedPartId={selectedPart?.id || ""}
+      surfaceFill={sketchFill}
                           sketchMaskDataUrl=""
                           sketchOutline={sketchOutline}
                         />

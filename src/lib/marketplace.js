@@ -361,6 +361,7 @@ export function createGalleryUploadFromSource({
   config,
   label,
   material,
+  imageUrl = "",
   colorFamily = "gray",
   sourceLabelZh,
   sourceLabelEn
@@ -381,7 +382,7 @@ export function createGalleryUploadFromSource({
     sceneZh: sourceLabelZh || "\u6765\u81ea\u5f53\u524d\u914d\u7f6e",
     sceneEn: sourceLabelEn || "From current configuration",
     roomLabel: "Custom gallery study",
-    imageUrl: pickFamilyImage(colorFamily, id + "-" + label),
+    imageUrl: imageUrl || pickFamilyImage(colorFamily, id + "-" + label),
     material: nextConfig.material,
     paletteLabelZh: meta.paletteLabelZh,
     paletteLabelEn: meta.paletteLabelEn,
@@ -397,6 +398,7 @@ export function createGallerySeriesFromSource({
   baseId,
   config,
   label,
+  imageUrl = "",
   sourceLabelZh,
   sourceLabelEn
 }) {
@@ -419,7 +421,7 @@ export function createGallerySeriesFromSource({
       sceneZh: sourceLabelZh || "\u5f53\u524d\u65b9\u6848\u7684\u8272\u7cfb\u6f14\u7ece",
       sceneEn: sourceLabelEn || "Color-series study from current design",
       roomLabel: "Series study / current proportions",
-      imageUrl: pickFamilyImage(familyValue, baseId + "-" + familyValue + "-" + label),
+      imageUrl: imageUrl || pickFamilyImage(familyValue, baseId + "-" + familyValue + "-" + label),
       material: nextConfig.material,
       paletteLabelZh: meta.paletteLabelZh,
       paletteLabelEn: meta.paletteLabelEn,

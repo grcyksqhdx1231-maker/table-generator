@@ -2790,8 +2790,32 @@ button {
 }
 
 .gallery-modal__visual {
+  position: relative;
   min-height: 100%;
   background: #171412;
+}
+
+.gallery-modal__nav {
+  position: absolute;
+  top: 50%;
+  z-index: 3;
+  width: 2.8rem;
+  min-width: 2.8rem;
+  height: 2.8rem;
+  min-height: 2.8rem;
+  border: 1px solid rgba(255, 248, 242, 0.28);
+  background: rgba(28, 23, 19, 0.52);
+  color: #fff8f2;
+  transform: translateY(-50%);
+  backdrop-filter: blur(10px);
+}
+
+.gallery-modal__nav--prev {
+  left: 1rem;
+}
+
+.gallery-modal__nav--next {
+  right: 1rem;
 }
 
 .gallery-modal__image {
@@ -2807,6 +2831,31 @@ button {
   gap: 1rem;
   padding: clamp(1.1rem, 2.5vw, 2rem);
   overflow: auto;
+}
+
+.gallery-modal__thumbs {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 0.55rem;
+}
+
+.gallery-modal__thumb {
+  padding: 0;
+  border: 1px solid rgba(28, 23, 19, 0.08);
+  background: rgba(255, 250, 242, 0.72);
+  overflow: hidden;
+}
+
+.gallery-modal__thumb.is-active {
+  border-color: rgba(217, 56, 30, 0.38);
+  box-shadow: 0 0 0 1px rgba(217, 56, 30, 0.16);
+}
+
+.gallery-modal__thumb img {
+  width: 100%;
+  height: 4.8rem;
+  display: block;
+  object-fit: cover;
 }
 
 .gallery-modal__facts {

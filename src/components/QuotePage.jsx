@@ -402,7 +402,10 @@ function getCopy(locale) {
       readyBadge: "AI 场景已就绪",
       previewBadge: "场景预览",
       failedBadge: "生成失败",
-      openLarge: "查看大图"
+      openLarge: "查看大图",
+      uploadGallery: "上传 4 张场景到 Gallery",
+      uploadGalleryDisabled: "先生成 4 张场景图",
+      uploadGalleryReady: "4 张场景图已上传到 Gallery"
     };
   }
 
@@ -429,7 +432,10 @@ function getCopy(locale) {
     readyBadge: "AI scene ready",
     previewBadge: "Scene preview",
     failedBadge: "Render failed",
-    openLarge: "View Large"
+    openLarge: "View Large",
+    uploadGallery: "Upload 4 Scenes To Gallery",
+    uploadGalleryDisabled: "Generate 4 scene images first",
+    uploadGalleryReady: "Uploaded 4 scenes to Gallery"
   };
 }
 
@@ -583,6 +589,7 @@ export default function QuotePage({
   onBack,
   onHome,
   onOpenDrafts,
+  onUploadSceneSet,
   partOverrides,
   patternAsset,
   surfaceFill,
@@ -608,6 +615,16 @@ export default function QuotePage({
   const activeSceneImage = activeScene
     ? generatedScenes[activeScene.key]?.imageUrl || activeScene.defaultImageUrl || ""
     : "";
+  const readySceneSet = scenes
+    .map((scene) => ({
+      key: scene.key,
+      title: scene.title,
+      scene: scene.scene,
+      room: scene.room,
+      imageUrl: generatedScenes[scene.key]?.imageUrl || ""
+    }))
+    .filter((item) => item.imageUrl);
+  const canUploadSceneSet = readySceneSet.length === scenes.length;
 
   useEffect(() => {
     setGeneratedScenes({});
@@ -730,6 +747,15 @@ export default function QuotePage({
             <Icon name="generate" />
             {isGenerating ? copy.generatingButton : copy.generateButton}
           </button>
+          <button
+            className="ghost-button"
+            disabled={!canUploadSceneSet}
+            onClick={() => onUploadSceneSet?.(readySceneSet)}
+            type="button"
+          >
+            <Icon name="upload" />
+            {canUploadSceneSet ? copy.uploadGallery : copy.uploadGalleryDisabled}
+          </button>
           <button className="primary-button" onClick={onBack} type="button">
             <Icon name="back" />
             {copy.back}
@@ -825,6 +851,15 @@ export default function QuotePage({
           >
             <Icon name="generate" />
             {isGenerating ? copy.generatingButton : copy.generateButton}
+          </button>
+          <button
+            className="ghost-button"
+            disabled={!canUploadSceneSet}
+            onClick={() => onUploadSceneSet?.(readySceneSet)}
+            type="button"
+          >
+            <Icon name="upload" />
+            {canUploadSceneSet ? copy.uploadGallery : copy.uploadGalleryDisabled}
           </button>
         </header>
 
@@ -947,15 +982,26 @@ export default function QuotePage({
           </article>
 
           <article className="quote-card quote-card--cta quote-card--generate-only">
-            <button
-              className={`primary-button ${isGenerating ? "is-loading" : ""}`}
-              disabled={isGenerating}
-              onClick={handleGenerateScenes}
-              type="button"
-            >
-              <Icon name="generate" />
-              {isGenerating ? copy.generatingButton : copy.generateButton}
-            </button>
+            <div className="panel__actions panel__actions--wrap">
+              <button
+                className={`primary-button ${isGenerating ? "is-loading" : ""}`}
+                disabled={isGenerating}
+                onClick={handleGenerateScenes}
+                type="button"
+              >
+                <Icon name="generate" />
+                {isGenerating ? copy.generatingButton : copy.generateButton}
+              </button>
+              <button
+                className="ghost-button"
+                disabled={!canUploadSceneSet}
+                onClick={() => onUploadSceneSet?.(readySceneSet)}
+                type="button"
+              >
+                <Icon name="upload" />
+                {canUploadSceneSet ? copy.uploadGallery : copy.uploadGalleryDisabled}
+              </button>
+            </div>
           </article>
         </section>
       </div>

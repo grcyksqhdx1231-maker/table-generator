@@ -1144,6 +1144,50 @@ export default function App() {
     );
   }
 
+  function handleUploadSceneSetToGallery(sceneSet) {
+    if (!Array.isArray(sceneSet) || !sceneSet.length) {
+      setStatus(locale === "zh" ? "还没有可上传的场景图。" : "No scene images are ready to upload.");
+      return;
+    }
+
+    const currentConfig = configRef.current;
+    const dominantTint =
+      partOverrides.modules?.tint ||
+      currentConfig.finishColor ||
+      partOverrides.tabletop?.tint ||
+      sketchFill.colorA ||
+      "";
+    const colorFamily = inferColorFamilyFromTint(dominantTint, currentConfig.material);
+    const imageUrls = sceneSet.map((item) => item.imageUrl).filter(Boolean);
+    const roomLabel =
+      sceneSet.map((item) => item.scene).filter(Boolean).join(" / ") || "Generated scenes";
+    const upload = createGalleryUploadFromSource({
+      id: crypto.randomUUID(),
+      config: currentConfig,
+      imageUrl: imageUrls[0] || "",
+      imageUrls,
+      label: getLocalizedDraftLabel(currentConfig, locale),
+      material: currentConfig.material,
+      colorFamily,
+      sourceLabelZh: "\u6765\u81ea AI \u573a\u666f\u56fe",
+      sourceLabelEn: "From AI scene set"
+    });
+
+    setGalleryUploads((current) => [
+      {
+        ...upload,
+        roomLabel
+      },
+      ...current
+    ].slice(0, 84));
+    setPhase("gallery");
+    setStatus(
+      locale === "zh"
+        ? "\u5df2\u5c06 4 \u5f20\u573a\u666f\u56fe\u4e0a\u4f20\u81f3 Gallery\u3002"
+        : "Uploaded 4 scene images to Gallery."
+    );
+  }
+
   function handleUploadDraftToGallery(draft) {
     const upload = createGalleryUploadFromSource({
       id: crypto.randomUUID(),
@@ -1874,6 +1918,7 @@ export default function App() {
         onBack={() => setPhase("configurator")}
         onHome={handleGoHome}
         onOpenDrafts={() => setDraftDrawerOpen(true)}
+        onUploadSceneSet={handleUploadSceneSetToGallery}
         partOverrides={partOverrides}
         patternAsset={null}
         surfaceFill={sketchFill}

@@ -362,6 +362,7 @@ export function createGalleryUploadFromSource({
   label,
   material,
   imageUrl = "",
+  imageUrls = [],
   colorFamily = "gray",
   sourceLabelZh,
   sourceLabelEn
@@ -383,6 +384,7 @@ export function createGalleryUploadFromSource({
     sceneEn: sourceLabelEn || "From current configuration",
     roomLabel: "Custom gallery study",
     imageUrl: imageUrl || pickFamilyImage(colorFamily, id + "-" + label),
+    imageUrls: imageUrls.length ? imageUrls : imageUrl ? [imageUrl] : [],
     material: nextConfig.material,
     paletteLabelZh: meta.paletteLabelZh,
     paletteLabelEn: meta.paletteLabelEn,
@@ -444,6 +446,7 @@ export function buildCartItemFromGalleryItem(item) {
     titleZh: item.titleZh,
     titleEn: item.titleEn,
     imageUrl: item.imageUrl,
+    imageUrls: Array.isArray(item.imageUrls) ? item.imageUrls : [],
     material: item.material,
     familyTint: item.familyTint,
     paletteLabelZh: item.paletteLabelZh,

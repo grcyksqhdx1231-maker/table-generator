@@ -94,6 +94,34 @@ function GalleryDetailModal({
   const copy = getCopy(locale);
   const estimate = getGalleryEstimate(item.config);
   const familyMeta = getColorFamilyMeta(item.colorFamily);
+  const imageUrls = Array.isArray(item.imageUrls) && item.imageUrls.length
+    ? item.imageUrls
+    : [item.imageUrl].filter(Boolean);
+  const [activeImageIndex, setActiveImageIndex] = useState(0);
+  const activeImageUrl = imageUrls[activeImageIndex] || item.imageUrl;
+
+  useEffect(() => {
+    setActiveImageIndex(0);
+  }, [item.id]);
+
+  useEffect(() => {
+    if (imageUrls.length <= 1) {
+      return undefined;
+    }
+
+    function handleKeyDown(event) {
+      if (event.key === "ArrowLeft") {
+        setActiveImageIndex((current) => (current === 0 ? imageUrls.length - 1 : current - 1));
+      }
+
+      if (event.key === "ArrowRight") {
+        setActiveImageIndex((current) => (current === imageUrls.length - 1 ? 0 : current + 1));
+      }
+    }
+
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [imageUrls.length]);
 
   return (
     <div className="quote-lightbox" role="dialog">
@@ -108,10 +136,36 @@ function GalleryDetailModal({
           <Icon name="close" />
         </button>
         <div className="gallery-modal__visual">
+          {imageUrls.length > 1 ? (
+            <>
+              <button
+                className="gallery-modal__nav gallery-modal__nav--prev"
+                onClick={() =>
+                  setActiveImageIndex((current) =>
+                    current === 0 ? imageUrls.length - 1 : current - 1
+                  )
+                }
+                type="button"
+              >
+                <Icon name="back" />
+              </button>
+              <button
+                className="gallery-modal__nav gallery-modal__nav--next"
+                onClick={() =>
+                  setActiveImageIndex((current) =>
+                    current === imageUrls.length - 1 ? 0 : current + 1
+                  )
+                }
+                type="button"
+              >
+                <Icon name="next" />
+              </button>
+            </>
+          ) : null}
           <img
             alt={locale === "zh" ? item.titleZh : item.titleEn}
             className="gallery-modal__image"
-            src={item.imageUrl}
+            src={activeImageUrl}
           />
         </div>
         <div className="gallery-modal__content">
@@ -133,6 +187,23 @@ function GalleryDetailModal({
               <strong>{formatMoney(estimate.total, locale)}</strong>
             </div>
           </div>
+
+          {imageUrls.length > 1 ? (
+            <div className="gallery-modal__thumbs">
+              {imageUrls.map((imageUrl, index) => (
+                <button
+                  key={`${item.id}-${index}`}
+                  className={`gallery-modal__thumb ${
+                    activeImageIndex === index ? "is-active" : ""
+                  }`}
+                  onClick={() => setActiveImageIndex(index)}
+                  type="button"
+                >
+                  <img alt={`${locale === "zh" ? item.titleZh : item.titleEn} ${index + 1}`} src={imageUrl} />
+                </button>
+              ))}
+            </div>
+          ) : null}
 
           <section className="market-section">
             <div className="panel__section-head">

@@ -109,39 +109,39 @@ const COLOR_FAMILY_META = {
 
 const FAMILY_IMAGE_POOLS = {
   red: [
-    "/generated-scenes/gallery-red.jpg",
-    "/generated-scenes/gallery-red.jpg",
-    "/generated-scenes/gallery-red.jpg"
+    "/quote-assets/default-scenes/dining-people.jpg",
+    "/generated-scenes/1776904845123-gallery.jpg",
+    "/generated-scenes/1777376805932-gallery.jpg"
   ],
   brown: [
-    "/generated-scenes/gallery-brown.jpg",
-    "/generated-scenes/gallery-brown.jpg",
-    "/generated-scenes/gallery-brown.jpg"
+    "/generated-scenes/1776904845754-dining.jpg",
+    "/generated-scenes/1777377223564-dining.jpg",
+    "/quote-assets/default-scenes/office-people.jpg"
   ],
   blue: [
-    "/generated-scenes/gallery-blue.jpg",
-    "/generated-scenes/gallery-blue.jpg",
-    "/generated-scenes/gallery-blue.jpg"
+    "/generated-scenes/1776904842805-office.jpg",
+    "/generated-scenes/1777376724223-office.jpg",
+    "/generated-scenes/1777377116521-office.jpg"
   ],
   purple: [
-    "/generated-scenes/gallery-purple.png",
-    "/generated-scenes/gallery-purple.png",
-    "/generated-scenes/gallery-purple.png"
+    "/quote-assets/default-scenes/gallery-people.jpg",
+    "/generated-scenes/1776913472360-gallery.png",
+    "/generated-scenes/1777378471975-gallery.png"
   ],
   beige: [
-    "/generated-scenes/gallery-beige.jpg",
-    "/generated-scenes/gallery-beige.jpg",
-    "/generated-scenes/gallery-beige.jpg"
+    "/quote-assets/default-scenes/bedroom-people.jpg",
+    "/generated-scenes/1776904842335-bedroom.jpg",
+    "/generated-scenes/1777376733491-bedroom.jpg"
   ],
   gray: [
-    "/generated-scenes/gallery-gray.png",
-    "/generated-scenes/gallery-gray.png",
-    "/generated-scenes/gallery-gray.png"
+    "/generated-scenes/1776913462547-office.png",
+    "/generated-scenes/1776913480542-dining.png",
+    "/generated-scenes/1777378497206-office.png"
   ],
   black: [
-    "/generated-scenes/gallery-black.png",
-    "/generated-scenes/gallery-black.png",
-    "/generated-scenes/gallery-black.png"
+    "/generated-scenes/1776913462925-bedroom.png",
+    "/generated-scenes/1777378466028-bedroom.png",
+    "/generated-scenes/1777377140805-gallery.jpg"
   ]
 };
 

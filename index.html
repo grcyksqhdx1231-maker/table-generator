@@ -1,0 +1,1241 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>上海鸟类记录-发声热图探索器</title>
+  <style>
+    :root{
+      --bg:#F5F5F5;
+      --panel:rgba(255,255,255,.72);
+      --panel-solid:#fffdfa;
+      --ink:#171717;
+      --muted:#74716d;
+      --line:rgba(20,20,20,.12);
+      --line-soft:rgba(20,20,20,.07);
+      --accent:#111;
+      --obs:#FFBB1E;
+      --heard:#58CCEC;
+      --diff:#8FAAFF;
+      --resident:#76E288;
+      --passage:#8FAAFF;
+      --summer:#FFBB1E;
+      --winter:#58CCEC;
+      --shadow:0 22px 70px rgba(0,0,0,.07);
+      --radius:8px;
+    }
+    @font-face{
+      font-family:"Fusion Pixel";
+      src:url("assets/fonts/fusion-pixel/fusion-pixel-12px-proportional-zh_hans.otf.woff2") format("woff2");
+      font-weight:400 900;
+      font-style:normal;
+      font-display:swap;
+      unicode-range:U+2E80-2EFF,U+3000-303F,U+31C0-31EF,U+3400-4DBF,U+4E00-9FFF,U+F900-FAFF,U+FF00-FFEF;
+    }
+    @font-face{
+      font-family:"Fusion Pixel";
+      src:url("assets/fonts/fusion-pixel/fusion-pixel-12px-proportional-latin.otf.woff2") format("woff2");
+      font-weight:400 900;
+      font-style:normal;
+      font-display:swap;
+      unicode-range:U+0000-00FF,U+0100-024F,U+1E00-1EFF,U+2000-206F,U+20A0-20CF,U+2100-214F,U+2190-21FF;
+    }
+    *{box-sizing:border-box}
+    html{scroll-behavior:smooth}
+    body{
+      margin:0;
+      color:var(--ink);
+      font-family:"Fusion Pixel","Microsoft YaHei","Segoe UI",Arial,sans-serif;
+      font-synthesis:none;
+      background:
+        linear-gradient(90deg, transparent 0 92px, rgba(0,0,0,.035) 93px, transparent 94px),
+        linear-gradient(0deg, transparent 0 92px, rgba(0,0,0,.025) 93px, transparent 94px),
+        #F5F5F5;
+      background-size:188px 188px, 188px 188px, auto;
+    }
+    body::before{
+      content:"";
+      position:fixed;
+      inset:0;
+      pointer-events:none;
+      z-index:-1;
+      background:
+        radial-gradient(ellipse at 20% 15%, rgba(118,226,136,.22), transparent 28%),
+        radial-gradient(ellipse at 55% 8%, rgba(143,170,255,.16), transparent 30%),
+        radial-gradient(ellipse at 83% 22%, rgba(88,204,236,.16), transparent 25%),
+        linear-gradient(120deg, transparent 0 14%, rgba(0,0,0,.06) 14.08%, transparent 14.22% 32%, rgba(0,0,0,.045) 32.08%, transparent 32.22% 52%, rgba(0,0,0,.04) 52.1%, transparent 52.24%),
+        linear-gradient(18deg, transparent 0 22%, rgba(0,0,0,.045) 22.08%, transparent 22.22% 46%, rgba(0,0,0,.035) 46.08%, transparent 46.22%);
+      opacity:.75;
+    }
+    .landing-home{
+      position:relative;
+      min-height:100svh;
+      overflow:hidden;
+      display:flex;
+      align-items:center;
+      padding:30px 28px 36px;
+      isolation:isolate;
+      background:
+        linear-gradient(90deg, rgba(0,0,0,.05) 1px, transparent 1px),
+        linear-gradient(0deg, rgba(0,0,0,.035) 1px, transparent 1px);
+      background-size:94px 94px;
+    }
+    .landing-home::before{
+      content:"";
+      position:absolute;
+      inset:0;
+      z-index:-2;
+      background:
+        linear-gradient(118deg, transparent 0 17%, rgba(118,226,136,.18) 17.08%, transparent 17.22% 38%, rgba(143,170,255,.18) 38.08%, transparent 38.22% 61%, rgba(88,204,236,.16) 61.08%, transparent 61.22%),
+        linear-gradient(24deg, transparent 0 26%, rgba(255,187,30,.18) 26.08%, transparent 26.22% 52%, rgba(0,0,0,.045) 52.08%, transparent 52.22%);
+    }
+    .landing-nav{
+      position:absolute;
+      top:28px;
+      left:28px;
+      right:28px;
+      z-index:4;
+      display:flex;
+      align-items:center;
+      justify-content:space-between;
+      gap:16px;
+    }
+    .landing-brand{
+      display:inline-flex;
+      align-items:center;
+      gap:10px;
+      color:var(--ink);
+      font-size:13px;
+      font-weight:750;
+    }
+    .landing-brand::before{
+      content:"";
+      width:34px;
+      height:18px;
+      display:inline-block;
+      background:
+        linear-gradient(90deg,var(--resident) 0 24%,transparent 24% 28%,var(--summer) 28% 52%,transparent 52% 56%,var(--winter) 56% 80%,transparent 80% 84%,var(--passage) 84%);
+      border:1px solid rgba(0,0,0,.18);
+      box-shadow:0 1px 0 rgba(255,255,255,.75) inset;
+    }
+    .landing-content{
+      position:relative;
+      z-index:3;
+      width:min(1180px,100%);
+      margin:0 auto;
+      padding-top:58px;
+    }
+    .landing-kicker{
+      display:inline-flex;
+      align-items:center;
+      gap:10px;
+      margin-bottom:20px;
+      color:var(--muted);
+      font-size:13px;
+      line-height:1.4;
+    }
+    .landing-kicker::before{
+      content:"";
+      width:42px;
+      height:1px;
+      background:rgba(0,0,0,.45);
+    }
+    .landing-title{
+      max-width:940px;
+      margin:0;
+      font-size:88px;
+      line-height:.95;
+      font-weight:800;
+      letter-spacing:0;
+    }
+    .landing-lead{
+      max-width:760px;
+      margin:24px 0 0;
+      color:var(--muted);
+      font-size:17px;
+      line-height:1.85;
+    }
+    .landing-actions{
+      display:flex;
+      flex-wrap:wrap;
+      gap:12px;
+      margin-top:32px;
+      align-items:center;
+    }
+    .landing-cta{
+      display:inline-flex;
+      align-items:center;
+      justify-content:center;
+      gap:10px;
+      min-height:44px;
+      padding:12px 17px;
+      border-radius:999px;
+      border:1px solid rgba(0,0,0,.16);
+      background:rgba(255,255,255,.78);
+      color:#111;
+      text-decoration:none;
+      box-shadow:0 1px 0 rgba(255,255,255,.84) inset,0 14px 34px rgba(0,0,0,.08);
+      transition:transform .16s ease,box-shadow .16s ease,border-color .16s ease;
+    }
+    .landing-cta:hover{
+      transform:translateY(-2px);
+      border-color:rgba(0,0,0,.35);
+      box-shadow:0 18px 42px rgba(0,0,0,.11);
+    }
+    .landing-cta.primary{
+      background:linear-gradient(90deg,rgba(255,187,30,.82),rgba(118,226,136,.76));
+    }
+    .landing-cta .arrow{
+      width:22px;
+      height:22px;
+      border-radius:50%;
+      display:inline-flex;
+      align-items:center;
+      justify-content:center;
+      background:rgba(255,255,255,.52);
+      border:1px solid rgba(0,0,0,.12);
+    }
+    .landing-metrics{
+      display:grid;
+      grid-template-columns:repeat(3,minmax(0,1fr));
+      gap:1px;
+      width:min(760px,100%);
+      margin-top:42px;
+      border:1px solid var(--line);
+      background:var(--line);
+    }
+    .landing-metric{
+      min-height:86px;
+      padding:14px;
+      background:rgba(255,255,255,.62);
+      backdrop-filter:blur(12px);
+    }
+    .landing-metric strong{
+      display:block;
+      font-size:26px;
+      line-height:1;
+      margin-bottom:8px;
+    }
+    .landing-metric span{
+      display:block;
+      color:var(--muted);
+      font-size:12px;
+      line-height:1.45;
+    }
+    .landing-scene{
+      position:absolute;
+      inset:0;
+      z-index:1;
+      pointer-events:none;
+      opacity:.92;
+    }
+    .landing-routes{
+      position:absolute;
+      inset:auto -3% 8% 34%;
+      width:72%;
+      height:58%;
+      overflow:visible;
+      filter:drop-shadow(0 12px 18px rgba(0,0,0,.08));
+    }
+    .landing-routes path{
+      fill:none;
+      stroke-width:2.2;
+      stroke-linecap:round;
+      stroke-dasharray:10 16;
+      animation:routeFlow 5.5s linear infinite;
+    }
+    .landing-routes .r1{stroke:var(--summer)}
+    .landing-routes .r2{stroke:var(--winter);animation-duration:6.5s}
+    .landing-routes .r3{stroke:var(--passage);animation-duration:7.2s}
+    .landing-routes .r4{stroke:var(--resident);animation-duration:8s}
+    .landing-heat-preview{
+      position:absolute;
+      right:5%;
+      top:16%;
+      width:460px;
+      max-width:42vw;
+      display:grid;
+      gap:7px;
+      transform:rotate(-4deg);
+      animation:floatPreview 8s ease-in-out infinite;
+    }
+    .landing-heat-row{
+      display:grid;
+      grid-template-columns:repeat(16,1fr);
+      gap:5px;
+    }
+    .landing-heat-row span{
+      height:15px;
+      border:1px solid rgba(0,0,0,.10);
+      background:rgba(255,255,255,.52);
+      box-shadow:0 1px 0 rgba(255,255,255,.72) inset;
+      animation:cellPulse 4.8s ease-in-out infinite;
+    }
+    .landing-heat-row:nth-child(1) span:nth-child(4n+1),
+    .landing-heat-row:nth-child(2) span:nth-child(4n+2){background:rgba(118,226,136,.72)}
+    .landing-heat-row:nth-child(3) span:nth-child(4n+3),
+    .landing-heat-row:nth-child(4) span:nth-child(4n+1){background:rgba(255,187,30,.76)}
+    .landing-heat-row:nth-child(5) span:nth-child(4n+2),
+    .landing-heat-row:nth-child(6) span:nth-child(4n+4){background:rgba(88,204,236,.72)}
+    .landing-heat-row:nth-child(7) span:nth-child(3n+1),
+    .landing-heat-row:nth-child(8) span:nth-child(5n+2){background:rgba(143,170,255,.72)}
+    .landing-heat-row span:nth-child(3n){animation-delay:.4s}
+    .landing-heat-row span:nth-child(5n){animation-delay:.9s}
+    .landing-label{
+      position:absolute;
+      display:inline-flex;
+      align-items:center;
+      min-height:28px;
+      padding:6px 10px;
+      border:1px solid var(--line);
+      background:rgba(255,255,255,.68);
+      color:#111;
+      box-shadow:0 10px 26px rgba(0,0,0,.06);
+      backdrop-filter:blur(12px);
+      font-size:12px;
+      animation:floatLabel 7s ease-in-out infinite;
+    }
+    .landing-label.l1{right:12%;top:12%;border-color:rgba(255,187,30,.55)}
+    .landing-label.l2{right:23%;bottom:23%;border-color:rgba(88,204,236,.55);animation-delay:1.2s}
+    .landing-label.l3{right:6%;bottom:36%;border-color:rgba(143,170,255,.55);animation-delay:2.1s}
+    .landing-scroll{
+      position:absolute;
+      left:50%;
+      bottom:28px;
+      z-index:4;
+      transform:translateX(-50%);
+      display:grid;
+      justify-items:center;
+      gap:8px;
+      color:var(--muted);
+      font-size:12px;
+    }
+    .landing-scroll::after{
+      content:"";
+      width:1px;
+      height:42px;
+      background:linear-gradient(180deg,rgba(0,0,0,.42),transparent);
+      animation:scrollCue 1.7s ease-in-out infinite;
+    }
+    @keyframes routeFlow{
+      to{stroke-dashoffset:-104}
+    }
+    @keyframes floatPreview{
+      0%,100%{transform:translateY(0) rotate(-4deg)}
+      50%{transform:translateY(-14px) rotate(-2deg)}
+    }
+    @keyframes cellPulse{
+      0%,100%{opacity:.58}
+      50%{opacity:1}
+    }
+    @keyframes floatLabel{
+      0%,100%{transform:translateY(0)}
+      50%{transform:translateY(-10px)}
+    }
+    @keyframes scrollCue{
+      0%,100%{transform:scaleY(.55);opacity:.45}
+      50%{transform:scaleY(1);opacity:1}
+    }
+    .wrap{max-width:1720px;margin:0 auto;padding:28px}
+    .hero,.card{
+      background:var(--panel);
+      border:1px solid var(--line);
+      border-radius:var(--radius);
+      box-shadow:var(--shadow);
+      backdrop-filter:blur(18px);
+    }
+    .hero{
+      position:relative;
+      padding:30px 34px;
+      margin-bottom:20px;
+      overflow:hidden;
+    }
+    .hero::before{
+      content:"";
+      position:absolute;
+      inset:18px 24px auto auto;
+      width:84px;
+      height:84px;
+      border-right:1.5px solid rgba(0,0,0,.7);
+      border-top:1.5px solid rgba(0,0,0,.7);
+      transform:rotate(45deg);
+      opacity:.32;
+      pointer-events:none;
+      z-index:0;
+    }
+    .hero::after{
+      content:"";
+      position:absolute;
+      left:0;
+      right:0;
+      bottom:0;
+      height:1px;
+      background:linear-gradient(90deg, transparent, rgba(0,0,0,.22), transparent);
+      pointer-events:none;
+      z-index:0;
+    }
+    .hero h1{
+      margin:0 0 10px;
+      font-size:34px;
+      line-height:1.15;
+      font-weight:650;
+      letter-spacing:0;
+    }
+    .hero p{margin:0;color:var(--muted);line-height:1.72;max-width:1080px}
+    .topbar{
+      position:relative;
+      z-index:2;
+      display:flex;
+      justify-content:space-between;
+      gap:16px;
+      align-items:flex-start;
+      margin-bottom:12px;
+    }
+    .lang-toggle{
+      border:1px solid var(--line);
+      border-radius:999px;
+      background:rgba(255,255,255,.72);
+      color:#111;
+      padding:8px 12px;
+      font:inherit;
+      cursor:pointer;
+      position:relative;
+      z-index:5;
+      pointer-events:auto;
+      min-width:92px;
+      box-shadow:0 1px 0 rgba(255,255,255,.85) inset;
+    }
+    .lang-toggle strong{font-weight:750}
+    .toolbar-grid{
+      display:grid;
+      grid-template-columns:1.15fr .9fr 1.05fr;
+      gap:12px;
+      margin-top:22px;
+    }
+    .toolbox{
+      border:1px solid var(--line);
+      border-radius:var(--radius);
+      padding:14px;
+      background:rgba(255,255,255,.64);
+      box-shadow:inset 0 1px 0 rgba(255,255,255,.8);
+    }
+    .toolbox h3{
+      margin:0 0 10px;
+      font-size:13px;
+      text-transform:uppercase;
+      letter-spacing:0;
+      font-weight:700;
+    }
+    .sub{
+      display:block;
+      margin-top:2px;
+      color:var(--muted);
+      font-size:12px;
+      font-weight:400;
+    }
+    .chip-row,.btn-row{
+      display:flex;
+      gap:10px;
+      flex-wrap:wrap;
+    }
+    .chip,.btn{
+      border:1px solid var(--line);
+      border-radius:999px;
+      background:rgba(255,255,255,.72);
+      color:var(--ink);
+      font:inherit;
+      padding:9px 13px;
+      cursor:pointer;
+      transition:background .16s ease,border-color .16s ease,box-shadow .16s ease,transform .16s ease;
+      box-shadow:0 1px 0 rgba(255,255,255,.85) inset;
+    }
+    .btn.with-badge{
+      display:inline-flex;
+      align-items:center;
+      gap:8px;
+    }
+    .mode-badge{
+      display:inline-flex;
+      align-items:center;
+      justify-content:center;
+      min-width:58px;
+      padding:4px 8px;
+      border-radius:999px;
+      background:rgba(34,29,26,.08);
+      color:var(--accent);
+      font-size:11px;
+      font-weight:700;
+      line-height:1;
+      border:1px solid rgba(35,75,102,.14);
+    }
+    .chip:hover,.btn:hover{
+      transform:translateY(-1px);
+      border-color:rgba(0,0,0,.34);
+      box-shadow:0 10px 28px rgba(0,0,0,.08);
+    }
+    .chip.active,.btn.active{
+      background:rgba(143,170,255,.30);
+      color:#111;
+      border-color:#8FAAFF;
+      box-shadow:0 0 0 1px rgba(255,255,255,.78) inset,0 10px 28px rgba(143,170,255,.24);
+    }
+    .btn.active .mode-badge{
+      background:rgba(255,255,255,.58);
+      color:#111;
+      border-color:rgba(0,0,0,.12);
+    }
+    .cursor-btn[data-cursor="arrow"].active{
+      background:rgba(143,170,255,.42);
+      border-color:#8FAAFF;
+    }
+    .cursor-btn[data-cursor="explore"].active{
+      background:rgba(255,187,30,.48);
+      border-color:#FFBB1E;
+    }
+    body[data-cursor-mode="arrow"] .heatmap-shell{
+      outline:3px solid rgba(143,170,255,.32);
+      box-shadow:inset 0 0 42px rgba(255,255,255,.72),0 0 0 6px rgba(143,170,255,.08);
+    }
+    body[data-cursor-mode="explore"] .heatmap-shell{
+      outline:3px solid rgba(255,187,30,.48);
+      box-shadow:inset 0 0 42px rgba(255,255,255,.72),0 0 0 6px rgba(255,187,30,.12);
+    }
+    .chip small,.btn small{opacity:.8}
+    .chip span,.btn span{display:inline-block}
+    .chip small,.btn small{
+      display:inline-block;
+      margin-left:4px;
+      font-size:12px;
+    }
+    .subtype-chip.active{
+      color:#111 !important;
+      border-color:currentColor;
+    }
+    .field{
+      display:grid;
+      gap:8px;
+      margin-top:8px;
+    }
+    input[type="text"],select{
+      width:100%;
+      padding:11px 12px;
+      border:1px solid var(--line);
+      border-radius:var(--radius);
+      font:inherit;
+      background:rgba(255,255,255,.82);
+      color:var(--ink);
+    }
+    .layout{
+      display:grid;
+      grid-template-columns:minmax(0,1.2fr) 380px;
+      gap:20px;
+      align-items:start;
+    }
+    .card{padding:18px}
+    .heatmap-top{
+      display:flex;
+      justify-content:space-between;
+      gap:12px;
+      align-items:flex-start;
+      flex-wrap:wrap;
+      margin-bottom:14px;
+    }
+    .heatmap-top h2{
+      margin:0;
+      font-size:21px;
+      font-weight:650;
+      letter-spacing:0;
+    }
+    .legend{
+      display:flex;
+      gap:14px;
+      flex-wrap:wrap;
+      color:var(--muted);
+      font-size:13px;
+    }
+    .legend span{display:inline-flex;align-items:center;gap:7px}
+    .legend-swatch{width:12px;height:12px;border-radius:3px;display:inline-block}
+    .status-line{color:var(--muted);font-size:13px;margin-top:8px}
+    .heatmap-shell{
+      border:1px solid var(--line);
+      border-radius:var(--radius);
+      background:
+        linear-gradient(90deg, transparent 0 36px, rgba(0,0,0,.035) 37px, transparent 38px),
+        linear-gradient(0deg, transparent 0 36px, rgba(0,0,0,.025) 37px, transparent 38px),
+        rgba(255,255,255,.76);
+      background-size:148px 148px, 148px 148px, auto;
+      overflow:auto;
+      padding:12px;
+      min-height:520px;
+      box-shadow:inset 0 0 42px rgba(255,255,255,.72);
+    }
+    .heatmap-shell.explore-mode{cursor:zoom-in}
+    .heatmap-shell.arrow-mode{cursor:default}
+    .svg-root text{font-family:"Fusion Pixel","Microsoft YaHei","Segoe UI",Arial,sans-serif}
+    .tooltip{
+      position:fixed;
+      z-index:60;
+      pointer-events:none;
+      display:none;
+      max-width:320px;
+      padding:10px 12px;
+      background:rgba(255,255,255,.94);
+      color:var(--ink);
+      border:1px solid rgba(0,0,0,.16);
+      border-radius:var(--radius);
+      box-shadow:0 18px 46px rgba(0,0,0,.20);
+      backdrop-filter:blur(16px);
+      font-size:13px;
+      line-height:1.5;
+    }
+    .inspector{
+      position:sticky;
+      top:18px;
+    }
+    .inspector h2{
+      margin:0 0 12px;
+      font-size:22px;
+    }
+    .inspector p{margin:0 0 10px;color:var(--muted);line-height:1.6}
+    .species-photo{
+      width:100%;
+      aspect-ratio:4/3;
+      border:1px solid var(--line);
+      border-radius:var(--radius);
+      overflow:hidden;
+      background:
+        linear-gradient(135deg, rgba(118,226,136,.18), rgba(143,170,255,.18)),
+        #fff;
+      display:flex;
+      align-items:center;
+      justify-content:center;
+      color:var(--muted);
+      margin-bottom:14px;
+    }
+    .species-photo img{
+      width:100%;
+      height:100%;
+      object-fit:cover;
+      display:block;
+    }
+    .info-grid{
+      display:grid;
+      gap:10px;
+    }
+    .info-block{
+      border:1px solid var(--line);
+      border-radius:var(--radius);
+      background:rgba(255,255,255,.72);
+      padding:14px;
+    }
+    .info-block h3{
+      margin:0 0 8px;
+      font-size:15px;
+    }
+    .info-block p{
+      margin:0;
+      color:var(--ink);
+      line-height:1.6;
+      font-size:14px;
+    }
+    .meta-list{
+      display:grid;
+      gap:8px;
+      margin-top:8px;
+    }
+    .meta-row{
+      display:grid;
+      grid-template-columns:92px 1fr;
+      gap:10px;
+      font-size:14px;
+    }
+    .meta-row strong{color:var(--muted)}
+    .link-list{
+      display:flex;
+      flex-wrap:wrap;
+      gap:8px;
+      margin-top:10px;
+    }
+    .link-pill{
+      display:inline-flex;
+      align-items:center;
+      gap:6px;
+      text-decoration:none;
+      color:var(--accent);
+      border:1px solid var(--line);
+      border-radius:999px;
+      padding:7px 10px;
+      background:rgba(255,255,255,.74);
+      font-size:12px;
+    }
+    .note-box{
+      border:1px solid rgba(255,187,30,.45);
+      border-radius:var(--radius);
+      background:rgba(255,187,30,.14);
+      padding:14px;
+      margin-top:10px;
+    }
+    .note-box h4{
+      margin:0 0 8px;
+      font-size:14px;
+      color:#8b5b14;
+    }
+    .note-box p{
+      margin:0;
+      color:#5a4a2b;
+      font-size:14px;
+      line-height:1.65;
+    }
+    .empty-state{
+      min-height:160px;
+      display:flex;
+      align-items:center;
+      justify-content:center;
+      text-align:center;
+      color:var(--muted);
+      border:1px dashed var(--line);
+      border-radius:var(--radius);
+      background:rgba(255,255,255,.48);
+      padding:24px;
+    }
+    #storiesMount{
+      margin-top:22px;
+      position:relative;
+      overflow:hidden;
+    }
+    #storiesMount::before{
+      content:"";
+      position:absolute;
+      inset:0;
+      pointer-events:none;
+      background:
+        linear-gradient(115deg, transparent 0 18%, rgba(0,0,0,.045) 18.08%, transparent 18.22% 46%, rgba(0,0,0,.035) 46.08%, transparent 46.22%),
+        linear-gradient(0deg, rgba(255,255,255,.55), rgba(255,255,255,0));
+      opacity:.65;
+    }
+    #storiesMount > *{position:relative}
+    .insight-head{
+      display:flex;
+      justify-content:space-between;
+      gap:18px;
+      align-items:flex-start;
+      margin-bottom:16px;
+    }
+    .insight-head h2{
+      margin:0 0 8px;
+      font-size:24px;
+      letter-spacing:0;
+    }
+    .insight-head p{
+      margin:0;
+      max-width:980px;
+      color:var(--muted);
+      line-height:1.7;
+    }
+    .insight-source-note{
+      flex:0 0 auto;
+      border:1px solid var(--line);
+      border-radius:999px;
+      padding:8px 12px;
+      color:var(--muted);
+      background:rgba(255,255,255,.58);
+      font-size:12px;
+    }
+    .insight-explorer{
+      display:grid;
+      grid-template-columns:1fr;
+      gap:16px;
+      align-items:start;
+    }
+    .insight-list{
+      display:grid;
+      grid-template-columns:repeat(auto-fit,minmax(240px,1fr));
+      gap:9px;
+    }
+    .insight-tab{
+      width:100%;
+      text-align:left;
+      border:1px solid var(--line);
+      border-radius:var(--radius);
+      background:rgba(255,255,255,.64);
+      color:var(--ink);
+      padding:12px;
+      cursor:pointer;
+      transition:transform .16s ease,border-color .16s ease,box-shadow .16s ease,background .16s ease;
+    }
+    .insight-tab:hover{
+      transform:translateY(-1px);
+      border-color:rgba(0,0,0,.28);
+      box-shadow:0 10px 28px rgba(0,0,0,.08);
+    }
+    .insight-tab.active{
+      background:rgba(143,170,255,.34);
+      color:#111;
+      border-color:#8FAAFF;
+      box-shadow:0 14px 32px rgba(143,170,255,.22);
+    }
+    .insight-tab strong{
+      display:block;
+      font-size:14px;
+      line-height:1.35;
+      margin-bottom:5px;
+    }
+    .insight-tab span{
+      display:block;
+      color:inherit;
+      opacity:.72;
+      font-size:12px;
+      line-height:1.45;
+    }
+    .insight-detail{
+      border:1px solid var(--line);
+      border-radius:var(--radius);
+      background:rgba(255,255,255,.68);
+      padding:16px;
+      min-height:0;
+      box-shadow:inset 0 1px 0 rgba(255,255,255,.78);
+    }
+    .insight-hero{
+      display:grid;
+      grid-template-columns:minmax(0,1.1fr) 320px;
+      gap:16px;
+      align-items:stretch;
+      margin-bottom:16px;
+    }
+    .insight-kicker{
+      color:var(--muted);
+      font-size:12px;
+      text-transform:uppercase;
+      letter-spacing:0;
+      margin-bottom:8px;
+    }
+    .insight-title{
+      margin:0 0 10px;
+      font-size:26px;
+      line-height:1.18;
+      letter-spacing:0;
+    }
+    .insight-summary{
+      margin:0;
+      color:var(--ink);
+      line-height:1.72;
+      font-size:15px;
+    }
+    .insight-image{
+      border:1px solid var(--line);
+      border-radius:var(--radius);
+      overflow:hidden;
+      background:
+        radial-gradient(circle at 28% 30%, rgba(118,226,136,.28), transparent 32%),
+        radial-gradient(circle at 65% 42%, rgba(143,170,255,.26), transparent 34%),
+        rgba(255,255,255,.72);
+      min-height:230px;
+      display:flex;
+      align-items:center;
+      justify-content:center;
+      color:var(--muted);
+    }
+    .insight-image img{
+      width:100%;
+      height:100%;
+      object-fit:cover;
+      display:block;
+    }
+    .insight-grid{
+      display:grid;
+      grid-template-columns:1fr 1fr;
+      gap:14px;
+    }
+    .insight-box{
+      border:1px solid var(--line);
+      border-radius:var(--radius);
+      background:rgba(255,255,255,.64);
+      padding:14px;
+    }
+    .insight-box h3{
+      margin:0 0 9px;
+      font-size:15px;
+    }
+    .insight-box p,.insight-box li{
+      color:var(--muted);
+      line-height:1.72;
+      font-size:13px;
+    }
+    .insight-box p{margin:0 0 10px}
+    .insight-box ul{margin:0;padding-left:18px}
+    .evidence-list{
+      display:grid;
+      gap:8px;
+    }
+    .evidence-link{
+      display:block;
+      text-decoration:none;
+      color:var(--ink);
+      border:1px solid var(--line);
+      border-radius:var(--radius);
+      background:rgba(255,255,255,.66);
+      padding:10px 12px;
+      transition:background .16s ease,transform .16s ease,border-color .16s ease;
+    }
+    .evidence-link:hover{
+      background:#fff;
+      transform:translateY(-1px);
+      border-color:rgba(0,0,0,.3);
+    }
+    .evidence-link strong{
+      display:block;
+      font-size:13px;
+      margin-bottom:4px;
+    }
+    .evidence-link span{
+      display:block;
+      color:var(--muted);
+      font-size:12px;
+      overflow:hidden;
+      text-overflow:ellipsis;
+      white-space:nowrap;
+    }
+    .species-jump-row{
+      display:flex;
+      flex-wrap:wrap;
+      gap:8px;
+    }
+    .species-jump{
+      border:1px solid var(--line);
+      border-radius:999px;
+      background:rgba(255,255,255,.68);
+      color:#111;
+      padding:8px 11px;
+      cursor:pointer;
+      font:inherit;
+      font-size:12px;
+    }
+    .strength-pill{
+      display:inline-flex;
+      align-items:center;
+      border-radius:999px;
+      padding:6px 9px;
+      font-size:12px;
+      font-weight:700;
+      color:#111;
+      background:rgba(118,226,136,.5);
+      border:1px solid rgba(0,0,0,.12);
+    }
+    .heat-cell{
+      transition:opacity .12s ease, filter .12s ease;
+      vector-effect:non-scaling-stroke;
+    }
+    .heat-cell:hover{
+      opacity:.88;
+      filter:drop-shadow(0 0 7px rgba(0,0,0,.22));
+    }
+    .cycle-line-card{
+      margin-top:22px;
+      overflow:hidden;
+      position:relative;
+    }
+    .cycle-line-card::before{
+      content:"";
+      position:absolute;
+      inset:0;
+      pointer-events:none;
+      background:
+        linear-gradient(115deg, transparent 0 22%, rgba(0,0,0,.035) 22.08%, transparent 22.22% 54%, rgba(0,0,0,.03) 54.08%, transparent 54.22%),
+        linear-gradient(0deg, rgba(255,255,255,.46), rgba(255,255,255,0));
+      opacity:.7;
+    }
+    .cycle-line-card > *{position:relative}
+    .cycle-line-head{
+      display:flex;
+      justify-content:space-between;
+      align-items:flex-start;
+      gap:18px;
+      flex-wrap:wrap;
+      margin-bottom:14px;
+    }
+    .cycle-line-head h2{
+      margin:0 0 8px;
+      font-size:24px;
+    }
+    .cycle-line-head p{
+      margin:0;
+      color:var(--muted);
+      line-height:1.7;
+      max-width:1040px;
+    }
+    .cycle-controls{
+      display:flex;
+      gap:10px;
+      flex-wrap:wrap;
+      align-items:center;
+    }
+    .cycle-year-select{
+      min-width:168px;
+      border-radius:999px;
+      padding:9px 13px;
+      border:1px solid var(--line);
+      background:rgba(255,255,255,.76);
+      color:var(--ink);
+      font:inherit;
+      cursor:pointer;
+      box-shadow:0 1px 0 rgba(255,255,255,.85) inset;
+    }
+    .cycle-chart-shell{
+      border:1px solid var(--line);
+      border-radius:var(--radius);
+      background:rgba(255,255,255,.68);
+      padding:12px;
+      overflow:auto;
+      box-shadow:inset 0 1px 0 rgba(255,255,255,.78);
+    }
+    .cycle-chart-shell svg{
+      min-width:1120px;
+      display:block;
+    }
+    .cycle-line{
+      fill:none;
+      stroke-width:3;
+      stroke-linecap:round;
+      stroke-linejoin:round;
+      vector-effect:non-scaling-stroke;
+      filter:drop-shadow(0 3px 8px rgba(0,0,0,.08));
+    }
+    .cycle-dot{
+      stroke:#fff;
+      stroke-width:1.5;
+      cursor:pointer;
+      transition:r .12s ease, filter .12s ease;
+    }
+    .cycle-dot:hover{
+      r:5.5;
+      filter:drop-shadow(0 0 7px rgba(0,0,0,.26));
+    }
+    .cycle-axis text,.cycle-grid-label{
+      fill:rgba(17,17,17,.58);
+      font-size:12px;
+    }
+    .cycle-note{
+      margin-top:10px;
+      color:var(--muted);
+      font-size:13px;
+      line-height:1.65;
+    }
+    @media (max-width: 1280px){
+      .landing-title{font-size:72px}
+      .landing-heat-preview{right:2%;opacity:.76}
+      .layout{grid-template-columns:1fr}
+      .inspector{position:static}
+      .insight-explorer{grid-template-columns:1fr}
+    }
+    @media (max-width: 980px){
+      .landing-home{align-items:flex-start;padding:92px 18px 34px}
+      .landing-nav{top:18px;left:18px;right:18px}
+      .landing-title{font-size:48px;line-height:1}
+      .landing-lead{font-size:15px}
+      .landing-heat-preview{position:relative;right:auto;top:auto;width:100%;max-width:none;margin-top:34px;transform:none}
+      .landing-routes{inset:auto -18% 4% 20%;width:110%;height:42%;opacity:.62}
+      .landing-metrics{grid-template-columns:1fr}
+      .landing-label{display:none}
+      .landing-scroll{display:none}
+      .toolbar-grid{grid-template-columns:1fr}
+      .hero h1{font-size:28px}
+      .topbar{display:block}
+      .lang-toggle{margin-bottom:12px}
+      .insight-head{display:block}
+      .insight-source-note{display:inline-block;margin-top:12px}
+      .insight-hero,.insight-grid{grid-template-columns:1fr}
+    }
+  </style>
+</head>
+<body>
+  <section class="landing-home" id="landingHome" aria-labelledby="landingTitle">
+    <nav class="landing-nav" aria-label="Landing navigation">
+      <div class="landing-brand" id="landingBrand">Shanghai Birds / Acoustic Cycle</div>
+      <a class="landing-cta" id="landingTopLink" href="#mainExplorer">进入热图</a>
+    </nav>
+    <div class="landing-scene" aria-hidden="true">
+      <div class="landing-heat-preview">
+        <div class="landing-heat-row"><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span></div>
+        <div class="landing-heat-row"><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span></div>
+        <div class="landing-heat-row"><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span></div>
+        <div class="landing-heat-row"><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span></div>
+        <div class="landing-heat-row"><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span></div>
+        <div class="landing-heat-row"><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span></div>
+        <div class="landing-heat-row"><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span></div>
+        <div class="landing-heat-row"><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span></div>
+      </div>
+      <svg class="landing-routes" viewBox="0 0 900 520" role="img" aria-label="Animated route lines">
+        <path class="r1" d="M70 420 C210 265 330 210 465 260 S725 280 835 90" />
+        <path class="r2" d="M45 120 C200 210 295 320 430 304 S650 190 820 250" />
+        <path class="r3" d="M90 330 C225 360 330 100 505 132 S685 390 860 365" />
+        <path class="r4" d="M210 455 C310 390 385 385 475 405 S660 455 770 410" />
+      </svg>
+      <div class="landing-label l1" id="landingLabelA">夏候鸟 / Summer</div>
+      <div class="landing-label l2" id="landingLabelB">冬候鸟 / Winter</div>
+      <div class="landing-label l3" id="landingLabelC">旅鸟 / Passage</div>
+    </div>
+    <div class="landing-content">
+      <div class="landing-kicker" id="landingKicker">Shanghai bird acoustic visualization</div>
+      <h1 class="landing-title" id="landingTitle">从记录到声音，探索上海鸟类的年周期</h1>
+      <p class="landing-lead" id="landingLead">滚动进入 48 时段热图，在同一套逻辑下比较物种出现、发声和差值，并从留鸟、旅鸟、夏候鸟、冬候鸟的节律里读出上海作为生态节点的角色。</p>
+      <div class="landing-actions">
+        <a class="landing-cta primary" id="landingStart" href="#mainExplorer"><span id="landingStartText">开始探索</span><span class="arrow">↓</span></a>
+        <a class="landing-cta" id="landingLineLink" href="#cycleLineSection">查看折线图</a>
+        <a class="landing-cta" id="landingInsightLink" href="#storiesMount">查看洞察</a>
+      </div>
+      <div class="landing-metrics" aria-label="Dataset summary">
+        <div class="landing-metric">
+          <strong>229</strong>
+          <span id="landingMetricA">个物种进入清洗后的可视化</span>
+        </div>
+        <div class="landing-metric">
+          <strong>48</strong>
+          <span id="landingMetricB">个年内阶段用于对齐观测与发声</span>
+        </div>
+        <div class="landing-metric">
+          <strong>3</strong>
+          <span id="landingMetricC">张热图：出现、发声、差值</span>
+        </div>
+      </div>
+    </div>
+    <div class="landing-scroll" id="landingScroll">Scroll</div>
+  </section>
+
+  <div class="wrap" id="mainExplorer">
+    <section class="hero">
+      <div class="topbar">
+        <div>
+          <h1 id="pageTitle">上海鸟类记录 / 发声热图探索器</h1>
+          <p id="pageLead">三种热图使用同一套“相对年内分布”口径：观测相对频率、发声相对频率，以及两者差值。箭头模式和探索模式都是全局生效的，所以不管你切到哪一种热图，这两种鼠标模式都会继续可用。</p>
+        </div>
+        <button class="lang-toggle" id="langToggle" type="button" aria-label="Switch language"><strong>CH</strong> / EN</button>
+      </div>
+
+      <div class="toolbar-grid">
+        <div class="toolbox">
+          <h3 id="viewModeHeading">热图视图 <span class="sub">View mode</span></h3>
+          <div class="btn-row" id="viewModeButtons"></div>
+          <div class="status-line" id="viewStatus"></div>
+        </div>
+
+        <div class="toolbox">
+          <h3 id="cursorModeHeading">鼠标模式 <span class="sub">Cursor mode</span></h3>
+          <div class="btn-row" id="cursorModeButtons"></div>
+          <div class="status-line" id="cursorStatus"></div>
+        </div>
+
+        <div class="toolbox">
+          <h3 id="subtypeHeading">留居类型筛选 <span class="sub">Subtype filters</span></h3>
+          <div class="chip-row" id="subtypeButtons"></div>
+          <div class="status-line" id="subtypeStatus"></div>
+        </div>
+
+        <div class="toolbox">
+          <h3 id="speciesHeading">单独看某一种鸟 <span class="sub">Single-species focus</span></h3>
+          <div class="field">
+            <input id="speciesSearch" list="speciesList" type="text" placeholder="输入中文名 / English / scientific name" />
+            <datalist id="speciesList"></datalist>
+            <div class="btn-row">
+              <button class="btn" id="clearSpeciesBtn">清除单物种</button>
+            </div>
+          </div>
+          <div class="status-line" id="speciesStatus"></div>
+        </div>
+
+        <div class="toolbox">
+          <h3 id="howHeading">说明 <span class="sub">How to read</span></h3>
+          <p id="howText">观测热图和发声热图都已经统一成“该时段占本物种全年总量的比例”。差值热图 = 发声相对频率 - 观测相对频率。</p>
+        </div>
+      </div>
+    </section>
+
+    <section class="layout">
+      <div class="card">
+        <div class="heatmap-top">
+          <div>
+            <h2 id="heatmapTitle">物种出现 / 被记录 × 48 时段热图</h2>
+            <p class="status-line" id="heatmapSummary"></p>
+          </div>
+          <div class="legend" id="heatmapLegend"></div>
+        </div>
+        <div class="heatmap-shell arrow-mode" id="heatmapShell">
+          <div id="heatmapMount"></div>
+        </div>
+      </div>
+
+      <aside class="card inspector">
+        <h2 id="inspectorTitle">探索面板</h2>
+        <p id="inspectorLead">切到探索模式后，把放大镜移到某个格子上，这里会显示该物种的图片、繁殖期、迁徙方向、是否上海本土，以及特殊类别说明。</p>
+        <div id="inspectorContent">
+          <div class="empty-state" id="inspectorEmpty">等待你在热图上悬停某个物种的某个时段。</div>
+        </div>
+      </aside>
+    </section>
+
+    <section class="card cycle-line-card" id="cycleLineSection">
+      <div class="cycle-line-head">
+        <div>
+          <h2 id="cycleLineHeading">四类鸟观测活动频率折线图</h2>
+          <p id="cycleLineLead">基于 eBird reporting rate 的 48 时段观测频率。这里优先使用频率而不是原始数量，因为不同年份和时段的观测清单数量不同，频率更适合展示鸟类自身的年周期活动结构。</p>
+        </div>
+        <div class="cycle-controls">
+          <select class="cycle-year-select" id="cycleYearSelect" aria-label="Select year">
+            <option value="all">2009-2026 合并</option>
+          </select>
+          <div class="chip-row" id="cycleSubtypeButtons"></div>
+        </div>
+      </div>
+      <div class="cycle-chart-shell" id="cycleLineMount"></div>
+      <p class="cycle-note" id="cycleLineNote">说明：当前项目文件只保留了 2009-2026 合并后的 48 时段 reporting rate，没有保留逐年切片；因此年度下拉先显示合并版。拿到含年份的原始 eBird 表后，可以无缝扩展为逐年切换。</p>
+    </section>
+
+    <section class="card insight-shell" id="storiesMount">
+      <div class="insight-head">
+        <div>
+          <h2 id="insightHeading">洞察证据库</h2>
+          <p id="insightLead">根据你给的 Markdown 重新整理：每条 insight 都可以单独查看，证据来源可以点击跳转；相关物种按钮会直接定位到上方热图中的对应物种。</p>
+        </div>
+        <div class="insight-source-note">Source: bird_visualization_insight_evidence.md</div>
+      </div>
+      <div class="insight-explorer">
+        <nav class="insight-list" id="insightList" aria-label="Insight list"></nav>
+        <article class="insight-detail" id="insightDetail"></article>
+      </div>
+    </section>
+  </div>
+
+  <div class="tooltip" id="tooltip"></div>
+
+  <script src="web_bird_acoustic_heatmap_data.js"></script>
+  <script src="web_bird_acoustic_heatmap_app.js?v=20260516-cyclelink1"></script>
+  <script>
+    (function () {
+      function fallbackToggleLanguage() {
+        if (window.switchBirdHeatmapLanguage) {
+          window.switchBirdHeatmapLanguage();
+          return;
+        }
+        var isEnglish = document.documentElement.lang === "en";
+        document.documentElement.lang = isEnglish ? "zh-CN" : "en";
+        var title = document.getElementById("pageTitle");
+        var lead = document.getElementById("pageLead");
+        var toggle = document.getElementById("langToggle");
+        if (title) title.textContent = isEnglish ? "上海鸟类记录 / 发声热图探索器" : "Shanghai Bird Record and Acoustic Heatmap Explorer";
+        if (lead) lead.textContent = isEnglish
+          ? "三种热图使用同一套“相对年内分布”口径：观测相对频率、发声相对频率，以及两者差值。箭头模式和探索模式都是全局生效的。"
+          : "The three heatmaps use the same within-year relative distribution: observed share, heard share, and their difference. Arrow and Explore modes work globally across all views.";
+        if (toggle) toggle.innerHTML = isEnglish ? "<strong>CH</strong> / EN" : "CH / <strong>EN</strong>";
+      }
+      var button = document.getElementById("langToggle");
+      if (button) {
+        button.addEventListener("click", function (event) {
+          event.preventDefault();
+          event.stopPropagation();
+          event.stopImmediatePropagation();
+          fallbackToggleLanguage();
+        }, true);
+      }
+    })();
+  </script>
+</body>
+</html>

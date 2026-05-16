@@ -1,0 +1,608 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Shanghai Bird Records Integrated Analysis</title>
+  <style>
+    :root {
+      --bg: #F5F5F5;
+      --panel: #F5F5F5;
+      --ink: #2D2D2D;
+      --muted: #666666;
+      --line: #D8D8D8;
+      --grid: #DDDDDD;
+      --active: #2F2F2F;
+      --shadow: 0 14px 32px rgba(0, 0, 0, 0.12);
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      background: var(--bg);
+      color: var(--ink);
+      font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Microsoft YaHei", Arial, sans-serif;
+      line-height: 1.45;
+    }
+    body.lang-en .cn-text { display: none !important; }
+    body.lang-zh .en-text { display: none !important; }
+    .page { width: min(1680px, calc(100vw - 40px)); margin: 0 auto; padding: 28px 0 56px; }
+    .site-header { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 22px; align-items: start; margin-bottom: 24px; }
+    .site-actions { display: grid; gap: 12px; justify-items: end; align-content: start; }
+    .global-legend { justify-content: flex-end; max-width: 520px; padding: 0; }
+    h1 { margin: 0; font-size: clamp(28px, 3.4vw, 48px); line-height: 1.05; letter-spacing: 0; }
+    .subtitle { margin: 10px 0 0; color: var(--muted); font-size: 15px; }
+    .toolbar, .tab-row { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+    .toolbar button, .tab-row button {
+      border: 1px solid var(--line);
+      background: transparent;
+      color: var(--ink);
+      border-radius: 999px;
+      padding: 8px 13px;
+      font-size: 13px;
+      cursor: pointer;
+      transition: border-color .16s ease, background .16s ease, box-shadow .16s ease;
+    }
+    .toolbar button.active, .tab-row button.active {
+      background: var(--active);
+      color: #fff;
+      border-color: var(--active);
+      box-shadow: 0 8px 18px rgba(0,0,0,.12);
+    }
+    .module, .cards-section {
+      border: 1px solid var(--line);
+      border-radius: 18px;
+      background: var(--panel);
+      overflow: hidden;
+      margin-bottom: 22px;
+    }
+    .module-head {
+      display: grid;
+      grid-template-columns: 1fr auto;
+      gap: 18px;
+      align-items: end;
+      padding: 24px 26px 16px;
+      border-bottom: 1px solid var(--line);
+    }
+    .module-head h2 { margin: 0; font-size: clamp(22px, 2.2vw, 32px); line-height: 1.12; letter-spacing: 0; }
+    .card-desc { max-width: 920px; margin: 8px 0 0; font-size: 14px; color: var(--muted); }
+    .chart-wrap { position: relative; padding: 18px 20px 26px; }
+    #bubbleChart, .pie-chart { width: 100%; display: grid; place-items: center; }
+    #barChart { width: 100%; overflow-x: auto; }
+    #scatterPlot { width: 100%; height: 680px; }
+    svg { display: block; max-width: 100%; }
+    .legend { display: flex; flex-wrap: wrap; gap: 10px 16px; align-items: center; padding: 0 26px 20px; color: var(--muted); font-size: 13px; }
+    .legend-item { display: inline-flex; align-items: center; gap: 7px; }
+    .swatch { width: 11px; height: 11px; border-radius: 50%; display: inline-block; }
+    .note { padding: 12px 26px 18px; font-size: 12px; color: var(--muted); }
+    .insight-panel { margin: 0 26px 26px; padding: 18px 20px; border: 1px solid var(--line); border-radius: 16px; background: var(--panel); }
+    .insight-panel h3 { margin: 0 0 10px; font-size: 17px; line-height: 1.25; }
+    .insight-panel p { margin: 8px 0 0; color: var(--muted); font-size: 13px; }
+    .insight-panel .refs { padding-top: 10px; border-top: 1px solid var(--line); font-size: 12px; font-weight: 700; }
+    .pie-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; margin: 12px 0 14px; }
+    .pie-card { border: 1px solid var(--line); border-radius: 16px; background: var(--panel); padding: 12px 12px 10px; }
+    .pie-card h4 { margin: 0 0 8px; font-size: 13px; color: var(--ink); line-height: 1.25; }
+    .pie-chart { min-height: 240px; }
+    .cards-section { padding: 24px 26px 28px; }
+    .cards-intro { display: flex; align-items: flex-end; justify-content: space-between; gap: 18px; margin: 4px 0 18px; }
+    .cards-intro h2 { margin: 0; font-size: clamp(22px, 2.2vw, 32px); line-height: 1.12; }
+    .bird-columns { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); column-gap: 30px; row-gap: 12px; align-items: stretch; }
+    .category-group { display: flex; flex-direction: column; min-width: 0; }
+    .category-title { min-height: 48px; display: flex; align-items: center; margin-bottom: 14px; font-size: 16px; font-weight: 750; line-height: 1.25; }
+    .category-title::before { content: ''; width: 4px; height: 18px; border-radius: 999px; background: var(--active); margin-right: 10px; flex: 0 0 auto; }
+    .cards-grid { display: grid; grid-template-columns: 1fr; gap: 12px; grid-auto-rows: auto; }
+    .bird-card { border: 1px solid var(--line); border-radius: 16px; background: var(--panel); display: flex; flex-direction: column; overflow: hidden; box-shadow: none; transition: border-color .18s ease, box-shadow .18s ease, transform .18s ease; scroll-margin-top: 26px; }
+    .bird-card:hover, .bird-card.flash { border-color: #8C8C8C; box-shadow: var(--shadow); transform: translateY(-2px); }
+    .card-img-wrapper { position: relative; width: 100%; aspect-ratio: 16 / 10; background: #EAEAEA; border-bottom: 1px solid var(--line); }
+    .card-img-wrapper img { width: 100%; height: 100%; object-fit: cover; display: block; }
+    .card-tag { position: absolute; top: 12px; left: 12px; padding: 4px 12px; color: #333; font-size: 12px; font-weight: 750; border: 1px solid rgba(0,0,0,.1); border-radius: 999px; }
+    .bird-card-body { padding: 14px 15px 15px; display: flex; flex-direction: column; flex-grow: 1; }
+    .bird-card-title { font-size: 17px; margin: 0 0 5px; font-weight: 700; color: #222; }
+    .bird-card-subtitle { font-size: 13px; color: #666; font-style: italic; margin: 0 0 12px; }
+    .bird-card-desc { font-size: 12.4px; line-height: 1.34; margin: 0 0 12px; flex-grow: 1; color: #555; }
+    body.lang-zh .bird-card-subtitle { display: none; }
+    body.lang-zh .bird-card-desc { font-size: 12.6px; line-height: 1.36; }
+    .interaction-hint { justify-self: end; align-self: center; max-width: 280px; color: var(--muted); font-size: 13px; border: 1px solid var(--line); border-radius: 14px; padding: 10px 12px; background: var(--panel); }
+    .cards-section .insight-panel { margin: 22px 0 0; }
+    .cards-insight-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 18px; margin-top: 12px; }
+    .cards-insight-item { border-left: 4px solid var(--active); padding-left: 12px; min-width: 0; }
+    .cards-insight-item h4 { margin: 0 0 8px; font-size: 15px; line-height: 1.28; color: var(--ink); }
+    .cards-insight-item p { margin: 0; font-size: 13px; line-height: 1.55; color: #555; }
+    audio { width: 100%; height: 30px; outline: none; margin-top: auto; }
+    .chart-circle, .pie-slice { transition: filter .16s ease, stroke-width .16s ease, opacity .16s ease; }
+    .chart-circle.is-hovered, .pie-slice.is-hovered { filter: drop-shadow(0 8px 12px rgba(0, 0, 0, .34)); opacity: 1; stroke-width: 2.4px; }
+    .tooltip { position: fixed; z-index: 1000; pointer-events: none; opacity: 0; transform: translate(-50%, calc(-100% - 14px)); background: rgba(45,45,45,.94); color: #fff; border: 1px solid rgba(255,255,255,.16); border-radius: 16px; padding: 11px 12px; min-width: 230px; box-shadow: 0 18px 36px rgba(0,0,0,.20); transition: opacity .08s ease; font-size: 12px; line-height: 1.45; }
+    .tooltip strong { display: block; font-size: 13px; margin-bottom: 5px; }
+    .tooltip .muted { color: rgba(255,255,255,.72); }
+    @media (max-width: 1100px) { .bird-columns, .cards-insight-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+    @media (max-width: 900px) { .page { width: min(100vw - 24px, 1680px); padding-top: 22px; } .site-header, .module-head, .cards-intro { grid-template-columns: 1fr; display: grid; } #scatterPlot { height: 620px; } }
+    @media (max-width: 680px) { .bird-columns, .pie-grid, .cards-insight-grid { grid-template-columns: 1fr; } .bird-card { height: auto !important; } .site-actions { justify-items: start; } .global-legend { justify-content: flex-start; } }
+  </style>
+</head>
+<body class="lang-en">
+  <div class="page">
+    <header class="site-header">
+      <div>
+        <h1 data-i18n="pageTitle">上海鸟类记录综合分析</h1>
+        <p class="subtitle" data-i18n="pageSubtitle"></p>
+      </div>
+      <div class="site-actions">
+        <div class="toolbar">
+          <button id="zhBtn" class="active" data-i18n="langZh">中文</button>
+          <button id="enBtn" data-i18n="langEn">English</button>
+        </div>
+        <div class="legend global-legend" id="legend"></div>
+      </div>
+    </header>
+
+    <section class="module">
+      <div class="module-head">
+        <div>
+          <h2 data-i18n="bubbleTitle"></h2>
+          <p class="card-desc" data-i18n="bubbleDesc"></p>
+        </div>
+        <div id="metricTabs" class="tab-row"></div>
+      </div>
+      <div id="bubbleChart" class="chart-wrap"></div>
+      <p class="note" data-i18n="bubbleNote"></p>
+      <div class="insight-panel">
+        <h3 data-i18n="bubbleInsightTitle"></h3>
+        <div class="pie-grid">
+          <div class="pie-card"><h4 data-i18n="occPieTitle"></h4><div id="occPieChart" class="pie-chart"></div></div>
+          <div class="pie-card"><h4 data-i18n="soundPieTitle"></h4><div id="soundPieChart" class="pie-chart"></div></div>
+        </div>
+        <p data-i18n="bubbleInsightPoint"></p>
+        <p data-i18n="bubbleInsightReason"></p>
+        <p data-i18n="bubbleInsightPoint2"></p>
+        <p data-i18n="bubbleInsightReason2"></p>
+        <p class="refs" data-i18n="bubbleInsightRefs"></p>
+      </div>
+    </section>
+
+    <section class="module">
+      <div class="module-head">
+        <div>
+          <h2 data-i18n="barTitle"></h2>
+          <p class="card-desc" data-i18n="barDesc"></p>
+        </div>
+        <div id="residenceTabs" class="tab-row"></div>
+      </div>
+      <div id="barChart" class="chart-wrap"></div>
+      <p class="note" data-i18n="barNote"></p>
+      <div class="insight-panel">
+        <h3 data-i18n="barInsightTitle"></h3>
+        <p data-i18n="barInsightPoint"></p>
+        <p data-i18n="barInsightReason"></p>
+        <p data-i18n="barInsightPoint2"></p>
+        <p data-i18n="barInsightReason2"></p>
+        <p class="refs" data-i18n="barInsightRefs"></p>
+      </div>
+    </section>
+
+    <section class="module">
+      <div class="module-head">
+        <div>
+          <h2 data-i18n="scatterTitle"></h2>
+          <p class="card-desc" data-i18n="scatterDesc"></p>
+        </div>
+        <div class="interaction-hint" data-i18n="scatterHint"></div>
+      </div>
+      <div id="scatterPlot" class="chart-wrap"></div>
+      <div class="note" data-i18n="scatterScaleNote"></div>
+      <div class="insight-panel">
+        <h3 data-i18n="scatterInsightTitle"></h3>
+        <p data-i18n="scatterInsightPoint1"></p>
+        <p data-i18n="scatterInsightReason1"></p>
+        <p data-i18n="scatterInsightPoint2"></p>
+        <p data-i18n="scatterInsightReason2"></p>
+        <p data-i18n="scatterInsightPoint3"></p>
+        <p class="refs" data-i18n="scatterInsightRefs"></p>
+      </div>
+    </section>
+
+    <section class="cards-section">
+      <div class="cards-intro">
+        <div>
+          <h2 data-i18n="cardsTitle"></h2>
+          <p class="subtitle" data-i18n="cardsDesc"></p>
+        </div>
+      </div>
+      <div id="birdCards"></div>
+      <div class="insight-panel cards-insight-panel">
+        <h3 data-i18n="cardsInsightTitle"></h3>
+        <div class="cards-insight-grid">
+          <div class="cards-insight-item">
+            <h4 data-i18n="cardsInsightSeenRareTitle"></h4>
+            <p data-i18n="cardsInsightSeenRare"></p>
+          </div>
+          <div class="cards-insight-item">
+            <h4 data-i18n="cardsInsightHeardRareTitle"></h4>
+            <p data-i18n="cardsInsightHeardRare"></p>
+          </div>
+          <div class="cards-insight-item">
+            <h4 data-i18n="cardsInsightSeenHeardTitle"></h4>
+            <p data-i18n="cardsInsightSeenHeard"></p>
+          </div>
+          <div class="cards-insight-item">
+            <h4 data-i18n="cardsInsightRareTitle"></h4>
+            <p data-i18n="cardsInsightRare"></p>
+          </div>
+        </div>
+        <p class="refs" data-i18n="cardsInsightRefs"></p>
+      </div>
+    </section>
+  </div>
+  <div id="tooltip" class="tooltip"></div>
+
+  <script>
+    const DATA = [{"bird_name_cn":"棕面鶯","bird_name_en":"Rufous-faced Warbler","scientific_name":"Abroscopus albogularis","occurrence_recording":782,"migrant_subtype":"resident","sound_recording":13},{"bird_name_cn":"八哥(冠八哥)","bird_name_en":"Crested Myna","scientific_name":"Acridotheres cristatellus","occurrence_recording":34381,"migrant_subtype":"resident","sound_recording":19},{"bird_name_cn":"紅頭山雀","bird_name_en":"Black-throated Bushtit","scientific_name":"Aegithalos concinnus","occurrence_recording":4280,"migrant_subtype":"resident","sound_recording":25},{"bird_name_cn":"Silver-throated Tit","bird_name_en":"Silver-throated Bushtit","scientific_name":"Aegithalos glaucogularis","occurrence_recording":2664,"migrant_subtype":"resident","sound_recording":12},{"bird_name_cn":"小雲雀","bird_name_en":"Oriental Skylark","scientific_name":"Alauda gulgula","occurrence_recording":2979,"migrant_subtype":"resident","sound_recording":20},{"bird_name_cn":"翠鳥","bird_name_en":"Common Kingfisher","scientific_name":"Alcedo atthis","occurrence_recording":15422,"migrant_subtype":"resident","sound_recording":26},{"bird_name_cn":"白腹秧雞","bird_name_en":"White-breasted Waterhen","scientific_name":"Amaurornis phoenicurus","occurrence_recording":4589,"migrant_subtype":"resident","sound_recording":8},{"bird_name_cn":"東方環頸鴴","bird_name_en":"Kentish Plover","scientific_name":"Anarhynchus alexandrinus","occurrence_recording":8826,"migrant_subtype":"resident","sound_recording":0},{"bird_name_cn":"花嘴鴨","bird_name_en":"Eastern Spot-billed Duck","scientific_name":"Anas zonorhyncha","occurrence_recording":14450,"migrant_subtype":"resident","sound_recording":6},{"bird_name_cn":"大白鷺","bird_name_en":"Great Egret","scientific_name":"Ardea alba","occurrence_recording":15992,"migrant_subtype":"resident","sound_recording":1},{"bird_name_cn":"蒼鷺","bird_name_en":"Grey Heron","scientific_name":"Ardea cinerea","occurrence_recording":24931,"migrant_subtype":"resident","sound_recording":4},{"bird_name_cn":"斑翡翠","bird_name_en":"Pied Kingfisher","scientific_name":"Ceryle rudis","occurrence_recording":1656,"migrant_subtype":"resident","sound_recording":2},{"bird_name_cn":"金翅雀","bird_name_en":"Grey-capped Greenfinch","scientific_name":"Chloris sinica","occurrence_recording":7344,"migrant_subtype":"resident","sound_recording":22},{"bird_name_cn":"棕扇尾鶯","bird_name_en":"Zitting Cisticola","scientific_name":"Cisticola juncidis","occurrence_recording":5252,"migrant_subtype":"resident","sound_recording":7},{"bird_name_cn":"灰喜鵲","bird_name_en":"Azure-winged Magpie","scientific_name":"Cyanopica cyanus","occurrence_recording":21326,"migrant_subtype":"resident","sound_recording":23},{"bird_name_cn":"黑天鵝","bird_name_en":"Black Swan","scientific_name":"Cygnus atratus","occurrence_recording":2076,"migrant_subtype":"resident","sound_recording":1},{"bird_name_cn":"Great Spotted Woodpecker","bird_name_en":"Great Spotted Woodpecker","scientific_name":"Dendrocopos major","occurrence_recording":1234,"migrant_subtype":"resident","sound_recording":3},{"bird_name_cn":"小白鷺","bird_name_en":"Little Egret","scientific_name":"Egretta garzetta","occurrence_recording":48734,"migrant_subtype":"resident","sound_recording":11},{"bird_name_cn":"紅隼","bird_name_en":"Common Kestrel","scientific_name":"Falco tinnunculus","occurrence_recording":9085,"migrant_subtype":"resident","sound_recording":31},{"bird_name_cn":"紅冠水雞","bird_name_en":"Common Moorhen","scientific_name":"Gallinula chloropus","occurrence_recording":30358,"migrant_subtype":"resident","sound_recording":43},{"bird_name_cn":"黑領椋鳥","bird_name_en":"Black-collared Starling","scientific_name":"Gracupica nigricollis","occurrence_recording":8853,"migrant_subtype":"resident","sound_recording":11},{"bird_name_cn":"斑文鳥","bird_name_en":"Scaly-breasted Munia","scientific_name":"Lonchura punctulata","occurrence_recording":1876,"migrant_subtype":"resident","sound_recording":3},{"bird_name_cn":"白腰文鳥","bird_name_en":"White-rumped Munia","scientific_name":"Lonchura striata","occurrence_recording":4139,"migrant_subtype":"resident","sound_recording":26},{"bird_name_cn":"黑鳶","bird_name_en":"Black Kite","scientific_name":"Milvus migrans","occurrence_recording":948,"migrant_subtype":"resident","sound_recording":2},{"bird_name_cn":"藍磯鶇","bird_name_en":"Blue Rock Thrush","scientific_name":"Monticola solitarius","occurrence_recording":1460,"migrant_subtype":"resident","sound_recording":2},{"bird_name_cn":"白鶺鴒","bird_name_en":"White Wagtail","scientific_name":"Motacilla alba","occurrence_recording":35300,"migrant_subtype":"resident","sound_recording":48},{"bird_name_cn":"夜鷺","bird_name_en":"Black-crowned Night Heron","scientific_name":"Nycticorax nycticorax","occurrence_recording":33119,"migrant_subtype":"resident","sound_recording":28},{"bird_name_cn":"Reed Parrotbill","bird_name_en":"Reed Parrotbill","scientific_name":"Paradoxornis heudei","occurrence_recording":5268,"migrant_subtype":"resident","sound_recording":0},{"bird_name_cn":"白頰山雀","bird_name_en":"Japanese Tit | Great Tit","scientific_name":"Parus cinereus","occurrence_recording":29208,"migrant_subtype":"resident","sound_recording":0},{"bird_name_cn":"麻雀","bird_name_en":"Eurasian Tree Sparrow","scientific_name":"Passer montanus","occurrence_recording":45919,"migrant_subtype":"resident","sound_recording":35},{"bird_name_cn":"環頸雉","bird_name_en":"Common Pheasant","scientific_name":"Phasianus colchicus","occurrence_recording":9867,"migrant_subtype":"resident","sound_recording":7},{"bird_name_cn":"喜鵲","bird_name_en":"Oriental Magpie | Eurasian Magpie","scientific_name":"Pica serica","occurrence_recording":32779,"migrant_subtype":"resident","sound_recording":10},{"bird_name_cn":"Speckled Piculet","bird_name_en":"Speckled Piculet","scientific_name":"Picumnus innominatus","occurrence_recording":1301,"migrant_subtype":"resident","sound_recording":30},{"bird_name_cn":"褐頭鷦鶯","bird_name_en":"Plain Prinia","scientific_name":"Prinia inornata","occurrence_recording":16525,"migrant_subtype":"resident","sound_recording":31},{"bird_name_cn":"黑臉噪眉","bird_name_en":"Masked Laughingthrush","scientific_name":"Pterorhinus perspicillatus","occurrence_recording":2503,"migrant_subtype":"resident","sound_recording":7},{"bird_name_cn":"白頰噪眉","bird_name_en":"White-browed Laughingthrush","scientific_name":"Pterorhinus sannio","occurrence_recording":1583,"migrant_subtype":"resident","sound_recording":11},{"bird_name_cn":"紅耳鵯","bird_name_en":"Red-whiskered Bulbul","scientific_name":"Pycnonotus jocosus","occurrence_recording":829,"migrant_subtype":"resident","sound_recording":4},{"bird_name_cn":"白頭翁","bird_name_en":"Light-vented Bulbul","scientific_name":"Pycnonotus sinensis","occurrence_recording":60707,"migrant_subtype":"resident","sound_recording":87},{"bird_name_cn":"珠頸斑鳩","bird_name_en":"Spotted Dove","scientific_name":"Spilopelia chinensis","occurrence_recording":61735,"migrant_subtype":"resident","sound_recording":31},{"bird_name_cn":"白環鸚嘴鵯","bird_name_en":"Collared Finchbill","scientific_name":"Spizixos semitorques","occurrence_recording":598,"migrant_subtype":"resident","sound_recording":2},{"bird_name_cn":"絲光椋鳥","bird_name_en":"Red-billed Starling","scientific_name":"Spodiopsar sericeus","occurrence_recording":11743,"migrant_subtype":"resident","sound_recording":24},{"bird_name_cn":"金背鳩","bird_name_en":"Oriental Turtle Dove","scientific_name":"Streptopelia orientalis","occurrence_recording":17108,"migrant_subtype":"resident","sound_recording":7},{"bird_name_cn":"粉紅鸚嘴","bird_name_en":"Vinous-throated Parrotbill","scientific_name":"Suthora webbiana","occurrence_recording":22057,"migrant_subtype":"resident","sound_recording":13},{"bird_name_cn":"小鸊鷉","bird_name_en":"Little Grebe","scientific_name":"Tachybaptus ruficollis","occurrence_recording":38013,"migrant_subtype":"resident","sound_recording":45},{"bird_name_cn":"中國黑鶇","bird_name_en":"Chinese Blackbird","scientific_name":"Turdus mandarinus","occurrence_recording":53918,"migrant_subtype":"resident","sound_recording":132},{"bird_name_cn":"戴勝","bird_name_en":"Eurasian Hoopoe","scientific_name":"Upupa epops","occurrence_recording":14765,"migrant_subtype":"resident","sound_recording":11},{"bird_name_cn":"紅嘴藍鵲","bird_name_en":"Red-billed Blue Magpie","scientific_name":"Urocissa erythroryncha","occurrence_recording":173,"migrant_subtype":"resident","sound_recording":3},{"bird_name_cn":"小啄木","bird_name_en":"Grey-capped Pygmy Woodpecker","scientific_name":"Yungipicus canicapillus","occurrence_recording":547,"migrant_subtype":"resident","sound_recording":4},{"bird_name_cn":"紅腳苦惡鳥","bird_name_en":"Brown Crake","scientific_name":"Zapornia akool","occurrence_recording":224,"migrant_subtype":"resident","sound_recording":2},{"bird_name_cn":"斯氏繡眼(綠繡眼)","bird_name_en":"Swinhoe's White-eye","scientific_name":"Zosterops simplex","occurrence_recording":12124,"migrant_subtype":"resident","sound_recording":78},{"bird_name_cn":"東方大葦鶯","bird_name_en":"Oriental Reed Warbler","scientific_name":"Acrocephalus orientalis","occurrence_recording":3487,"migrant_subtype":"summer_visitor","sound_recording":6},{"bird_name_cn":"鐵嘴鴴","bird_name_en":"Greater Sand Plover","scientific_name":"Anarhynchus leschenaultii","occurrence_recording":2993,"migrant_subtype":"summer_visitor","sound_recording":0},{"bird_name_cn":"蒙古鴴","bird_name_en":"Lesser Sand Plover","scientific_name":"Anarhynchus mongolus","occurrence_recording":3451,"migrant_subtype":"summer_visitor","sound_recording":0},{"bird_name_cn":"白背鷚","bird_name_en":"Pechora Pipit","scientific_name":"Anthus gustavi","occurrence_recording":541,"migrant_subtype":"summer_visitor","sound_recording":8},{"bird_name_cn":"叉尾雨燕","bird_name_en":"Pacific Swift","scientific_name":"Apus pacificus","occurrence_recording":692,"migrant_subtype":"summer_visitor","sound_recording":4},{"bird_name_cn":"紫鷺","bird_name_en":"Purple Heron","scientific_name":"Ardea purpurea","occurrence_recording":2869,"migrant_subtype":"summer_visitor","sound_recording":1},{"bird_name_cn":"翻石鷸","bird_name_en":"Ruddy Turnstone","scientific_name":"Arenaria interpres","occurrence_recording":1627,"migrant_subtype":"summer_visitor","sound_recording":6},{"bird_name_cn":"黃小鷺","bird_name_en":"Yellow Bittern","scientific_name":"Botaurus sinensis","occurrence_recording":5294,"migrant_subtype":"summer_visitor","sound_recording":0},{"bird_name_cn":"綠簑鷺","bird_name_en":"Striated Heron","scientific_name":"Butorides atricapilla","occurrence_recording":1114,"migrant_subtype":"summer_visitor","sound_recording":0},{"bird_name_cn":"寬嘴鷸","bird_name_en":"Broad-billed Sandpiper","scientific_name":"Calidris falcinellus","occurrence_recording":1871,"migrant_subtype":"summer_visitor","sound_recording":12},{"bird_name_cn":"紅胸濱鷸","bird_name_en":"Red-necked Stint","scientific_name":"Calidris ruficollis","occurrence_recording":6204,"migrant_subtype":"summer_visitor","sound_recording":6},{"bird_name_cn":"長趾濱鷸","bird_name_en":"Long-toed Stint","scientific_name":"Calidris subminuta","occurrence_recording":3103,"migrant_subtype":"summer_visitor","sound_recording":5},{"bird_name_cn":"野鴝","bird_name_en":"Siberian Rubythroat","scientific_name":"Calliope calliope","occurrence_recording":1052,"migrant_subtype":"summer_visitor","sound_recording":46},{"bird_name_cn":"普通夜鷹","bird_name_en":"Grey Nightjar","scientific_name":"Caprimulgus jotaka","occurrence_recording":673,"migrant_subtype":"summer_visitor","sound_recording":1},{"bird_name_cn":"番鵑","bird_name_en":"Lesser Coucal","scientific_name":"Centropus bengalensis","occurrence_recording":4454,"migrant_subtype":"summer_visitor","sound_recording":6},{"bird_name_cn":"黑腹燕鷗","bird_name_en":"Whiskered Tern","scientific_name":"Chlidonias hybrida","occurrence_recording":3941,"migrant_subtype":"summer_visitor","sound_recording":7},{"bird_name_cn":"白翅黑燕鷗","bird_name_en":"White-winged Tern","scientific_name":"Chlidonias leucopterus","occurrence_recording":3023,"migrant_subtype":"summer_visitor","sound_recording":1},{"bird_name_cn":"冠郭公","bird_name_en":"Chestnut-winged Cuckoo","scientific_name":"Clamator coromandus","occurrence_recording":264,"migrant_subtype":"summer_visitor","sound_recording":6},{"bird_name_cn":"大杜鵑","bird_name_en":"Common Cuckoo","scientific_name":"Cuculus canorus","occurrence_recording":3839,"migrant_subtype":"summer_visitor","sound_recording":10},{"bird_name_cn":"四聲杜鵑","bird_name_en":"Indian Cuckoo","scientific_name":"Cuculus micropterus","occurrence_recording":1663,"migrant_subtype":"summer_visitor","sound_recording":27},{"bird_name_cn":"小杜鵑","bird_name_en":"Lesser Cuckoo","scientific_name":"Cuculus poliocephalus","occurrence_recording":493,"migrant_subtype":"summer_visitor","sound_recording":9},{"bird_name_cn":"方尾鶲","bird_name_en":"Grey-headed Canary-flycatcher","scientific_name":"Culicicapa ceylonensis","occurrence_recording":165,"migrant_subtype":"summer_visitor","sound_recording":2},{"bird_name_cn":"白腹琉璃","bird_name_en":"Blue-and-white Flycatcher","scientific_name":"Cyanoptila cyanomelana","occurrence_recording":2624,"migrant_subtype":"summer_visitor","sound_recording":1},{"bird_name_cn":"樹鵲","bird_name_en":"Grey Treepie","scientific_name":"Dendrocitta formosae","occurrence_recording":745,"migrant_subtype":"summer_visitor","sound_recording":11},{"bird_name_cn":"山鶺鴒","bird_name_en":"Forest Wagtail","scientific_name":"Dendronanthus indicus","occurrence_recording":282,"migrant_subtype":"summer_visitor","sound_recording":15},{"bird_name_cn":"髮冠卷尾","bird_name_en":"Hair-crested Drongo","scientific_name":"Dicrurus hottentottus","occurrence_recording":699,"migrant_subtype":"summer_visitor","sound_recording":1},{"bird_name_cn":"灰卷尾","bird_name_en":"Ashy Drongo","scientific_name":"Dicrurus leucophaeus","occurrence_recording":468,"migrant_subtype":"summer_visitor","sound_recording":1},{"bird_name_cn":"大卷尾","bird_name_en":"Black Drongo","scientific_name":"Dicrurus macrocercus","occurrence_recording":2156,"migrant_subtype":"summer_visitor","sound_recording":3},{"bird_name_cn":"黃眉鵐","bird_name_en":"Yellow-browed Bunting","scientific_name":"Emberiza chrysophrys","occurrence_recording":1164,"migrant_subtype":"summer_visitor","sound_recording":20},{"bird_name_cn":"白眉鵐","bird_name_en":"Tristram's Bunting","scientific_name":"Emberiza tristrami","occurrence_recording":2869,"migrant_subtype":"summer_visitor","sound_recording":18},{"bird_name_cn":"噪鵑","bird_name_en":"Asian Koel","scientific_name":"Eudynamys scolopaceus","occurrence_recording":212,"migrant_subtype":"summer_visitor","sound_recording":22},{"bird_name_cn":"佛法僧","bird_name_en":"Oriental Dollarbird","scientific_name":"Eurystomus orientalis","occurrence_recording":1855,"migrant_subtype":"summer_visitor","sound_recording":4},{"bird_name_cn":"黃眉黃鶲","bird_name_en":"Narcissus Flycatcher","scientific_name":"Ficedula narcissina","occurrence_recording":1605,"migrant_subtype":"summer_visitor","sound_recording":4},{"bird_name_cn":"白眉鶲","bird_name_en":"Yellow-rumped Flycatcher","scientific_name":"Ficedula zanthopygia","occurrence_recording":2979,"migrant_subtype":"summer_visitor","sound_recording":10},{"bird_name_cn":"中地鷸","bird_name_en":"Swinhoe's Snipe","scientific_name":"Gallinago megala","occurrence_recording":573,"migrant_subtype":"summer_visitor","sound_recording":1},{"bird_name_cn":"針尾鷸","bird_name_en":"Pin-tailed Snipe","scientific_name":"Gallinago stenura","occurrence_recording":821,"migrant_subtype":"summer_visitor","sound_recording":3},{"bird_name_cn":"鷗嘴燕鷗","bird_name_en":"Gull-billed Tern","scientific_name":"Gelochelidon nilotica","occurrence_recording":5590,"migrant_subtype":"summer_visitor","sound_recording":11},{"bird_name_cn":"白眉地鶇","bird_name_en":"Siberian Thrush","scientific_name":"Geokichla sibirica","occurrence_recording":678,"migrant_subtype":"summer_visitor","sound_recording":8},{"bird_name_cn":"燕鴴","bird_name_en":"Oriental Pratincole","scientific_name":"Glareola maldivarum","occurrence_recording":2722,"migrant_subtype":"summer_visitor","sound_recording":1},{"bird_name_cn":"黑頭翡翠","bird_name_en":"Black-capped Kingfisher","scientific_name":"Halcyon pileata","occurrence_recording":329,"migrant_subtype":"summer_visitor","sound_recording":2},{"bird_name_cn":"Marsh Grassbird","bird_name_en":"Marsh Grassbird","scientific_name":"Helopsaltes pryeri","occurrence_recording":778,"migrant_subtype":"summer_visitor","sound_recording":7},{"bird_name_cn":"栗背短腳鵯","bird_name_en":"Chestnut Bulbul","scientific_name":"Hemixos castanonotus","occurrence_recording":263,"migrant_subtype":"summer_visitor","sound_recording":5},{"bird_name_cn":"鷹鵑","bird_name_en":"Large Hawk-Cuckoo","scientific_name":"Hierococcyx sparverioides","occurrence_recording":219,"migrant_subtype":"summer_visitor","sound_recording":5},{"bird_name_cn":"高蹺鴴","bird_name_en":"Black-winged Stilt","scientific_name":"Himantopus himantopus","occurrence_recording":7371,"migrant_subtype":"summer_visitor","sound_recording":3},{"bird_name_cn":"家燕","bird_name_en":"Barn Swallow","scientific_name":"Hirundo rustica","occurrence_recording":21378,"migrant_subtype":"summer_visitor","sound_recording":10},{"bird_name_cn":"遠東樹鶯","bird_name_en":"Manchurian Bush Warbler","scientific_name":"Horornis canturians","occurrence_recording":3438,"migrant_subtype":"summer_visitor","sound_recording":12},{"bird_name_cn":"小鶯","bird_name_en":"Brown-flanked Bush Warbler","scientific_name":"Horornis fortipes","occurrence_recording":812,"migrant_subtype":"summer_visitor","sound_recording":19},{"bird_name_cn":"水雉","bird_name_en":"Pheasant-tailed Jacana","scientific_name":"Hydrophasianus chirurgus","occurrence_recording":739,"migrant_subtype":"summer_visitor","sound_recording":8},{"bird_name_cn":"紅嘴黑鵯","bird_name_en":"Black Bulbul","scientific_name":"Hypsipetes leucocephalus","occurrence_recording":429,"migrant_subtype":"summer_visitor","sound_recording":1},{"bird_name_cn":"黑翅山椒鳥","bird_name_en":"Black-winged Cuckooshrike","scientific_name":"Lalage melaschistos","occurrence_recording":811,"migrant_subtype":"summer_visitor","sound_recording":9},{"bird_name_cn":"紅尾伯勞","bird_name_en":"Brown Shrike","scientific_name":"Lanius cristatus","occurrence_recording":5287,"migrant_subtype":"summer_visitor","sound_recording":5},{"bird_name_cn":"虎紋伯勞","bird_name_en":"Tiger Shrike","scientific_name":"Lanius tigrinus","occurrence_recording":1321,"migrant_subtype":"summer_visitor","sound_recording":3},{"bird_name_cn":"黑尾鷗","bird_name_en":"Black-tailed Gull","scientific_name":"Larus crassirostris","occurrence_recording":3954,"migrant_subtype":"summer_visitor","sound_recording":5},{"bird_name_cn":"藍歌鴝","bird_name_en":"Siberian Blue Robin","scientific_name":"Larvivora cyane","occurrence_recording":1528,"migrant_subtype":"summer_visitor","sound_recording":1},{"bird_name_cn":"黑尾鷸","bird_name_en":"Black-tailed Godwit","scientific_name":"Limosa limosa","occurrence_recording":5351,"migrant_subtype":"summer_visitor","sound_recording":5},{"bird_name_cn":"寬嘴鶲","bird_name_en":"Asian Brown Flycatcher","scientific_name":"Muscicapa dauurica","occurrence_recording":5295,"migrant_subtype":"summer_visitor","sound_recording":10},{"bird_name_cn":"灰斑鶲","bird_name_en":"Grey-streaked Flycatcher","scientific_name":"Muscicapa griseisticta","occurrence_recording":2158,"migrant_subtype":"summer_visitor","sound_recording":8},{"bird_name_cn":"烏鶲","bird_name_en":"Dark-sided Flycatcher","scientific_name":"Muscicapa sibirica","occurrence_recording":1405,"migrant_subtype":"summer_visitor","sound_recording":1},{"bird_name_cn":"黦鷸","bird_name_en":"Far Eastern Curlew","scientific_name":"Numenius madagascariensis","occurrence_recording":1738,"migrant_subtype":"summer_visitor","sound_recording":2},{"bird_name_cn":"中杓鷸","bird_name_en":"Eurasian Whimbrel","scientific_name":"Numenius phaeopus","occurrence_recording":5722,"migrant_subtype":"summer_visitor","sound_recording":24},{"bird_name_cn":"雞尾鸚鵡","bird_name_en":"Cockatiel","scientific_name":"Nymphicus hollandicus","occurrence_recording":11,"migrant_subtype":"summer_visitor","sound_recording":1},{"bird_name_cn":"東方角鴞","bird_name_en":"Oriental Scops Owl","scientific_name":"Otus sunia","occurrence_recording":362,"migrant_subtype":"summer_visitor","sound_recording":3},{"bird_name_cn":"小灰山椒鳥","bird_name_en":"Swinhoe's Minivet","scientific_name":"Pericrocotus cantonensis","occurrence_recording":930,"migrant_subtype":"summer_visitor","sound_recording":19},{"bird_name_cn":"灰山椒鳥","bird_name_en":"Ashy Minivet","scientific_name":"Pericrocotus divaricatus","occurrence_recording":418,"migrant_subtype":"summer_visitor","sound_recording":10},{"bird_name_cn":"極北柳鶯","bird_name_en":"Arctic Warbler","scientific_name":"Phylloscopus borealis","occurrence_recording":2731,"migrant_subtype":"summer_visitor","sound_recording":13},{"bird_name_cn":"庫頁島柳鶯","bird_name_en":"Sakhalin Leaf Warbler","scientific_name":"Phylloscopus borealoides","occurrence_recording":818,"migrant_subtype":"summer_visitor","sound_recording":14},{"bird_name_cn":"冠羽柳鶯","bird_name_en":"Eastern Crowned Warbler","scientific_name":"Phylloscopus coronatus","occurrence_recording":3552,"migrant_subtype":"summer_visitor","sound_recording":8},{"bird_name_cn":"勘察加柳鶯","bird_name_en":"Kamchatka Leaf Warbler","scientific_name":"Phylloscopus examinandus","occurrence_recording":163,"migrant_subtype":"summer_visitor","sound_recording":7},{"bird_name_cn":"雙斑綠柳鶯","bird_name_en":"Two-barred Warbler","scientific_name":"Phylloscopus plumbeitarsus","occurrence_recording":144,"migrant_subtype":"summer_visitor","sound_recording":6},{"bird_name_cn":"黑眉柳鶯","bird_name_en":"Sulphur-breasted Warbler","scientific_name":"Phylloscopus ricketti","occurrence_recording":135,"migrant_subtype":"summer_visitor","sound_recording":3},{"bird_name_cn":"巨嘴柳鶯","bird_name_en":"Radde's Warbler","scientific_name":"Phylloscopus schwarzi","occurrence_recording":218,"migrant_subtype":"summer_visitor","sound_recording":2},{"bird_name_cn":"淡腳柳鶯","bird_name_en":"Pale-legged Leaf Warbler","scientific_name":"Phylloscopus tenellipes","occurrence_recording":2142,"migrant_subtype":"summer_visitor","sound_recording":14},{"bird_name_cn":"八色鳥","bird_name_en":"Fairy Pitta","scientific_name":"Pitta nympha","occurrence_recording":742,"migrant_subtype":"summer_visitor","sound_recording":9},{"bird_name_cn":"太平洋金斑鴴","bird_name_en":"Pacific Golden Plover","scientific_name":"Pluvialis fulva","occurrence_recording":1901,"migrant_subtype":"summer_visitor","sound_recording":2},{"bird_name_cn":"大冠鷲","bird_name_en":"Crested Serpent Eagle","scientific_name":"Spilornis cheela","occurrence_recording":22,"migrant_subtype":"summer_visitor","sound_recording":2},{"bird_name_cn":"灰椋鳥","bird_name_en":"White-cheeked Starling","scientific_name":"Spodiopsar cineraceus","occurrence_recording":19076,"migrant_subtype":"summer_visitor","sound_recording":18},{"bird_name_cn":"燕鷗","bird_name_en":"Common Tern","scientific_name":"Sterna hirundo","occurrence_recording":3784,"migrant_subtype":"summer_visitor","sound_recording":5},{"bird_name_cn":"小燕鷗","bird_name_en":"Little Tern","scientific_name":"Sternula albifrons","occurrence_recording":2311,"migrant_subtype":"summer_visitor","sound_recording":7},{"bird_name_cn":"紅鳩","bird_name_en":"Red Collared Dove","scientific_name":"Streptopelia tranquebarica","occurrence_recording":2095,"migrant_subtype":"summer_visitor","sound_recording":5},{"bird_name_cn":"赤腹鷹","bird_name_en":"Chinese Sparrowhawk","scientific_name":"Tachyspiza soloensis","occurrence_recording":455,"migrant_subtype":"summer_visitor","sound_recording":0},{"bird_name_cn":"阿穆爾綬帶","bird_name_en":"Amur Paradise Flycatcher","scientific_name":"Terpsiphone incei","occurrence_recording":1112,"migrant_subtype":"summer_visitor","sound_recording":9},{"bird_name_cn":"黃足鷸","bird_name_en":"Grey-tailed Tattler","scientific_name":"Tringa brevipes","occurrence_recording":3309,"migrant_subtype":"summer_visitor","sound_recording":6},{"bird_name_cn":"鷹斑鷸","bird_name_en":"Wood Sandpiper","scientific_name":"Tringa glareola","occurrence_recording":5207,"migrant_subtype":"summer_visitor","sound_recording":12},{"bird_name_cn":"小青足鷸","bird_name_en":"Marsh Sandpiper","scientific_name":"Tringa stagnatilis","occurrence_recording":3873,"migrant_subtype":"summer_visitor","sound_recording":4},{"bird_name_cn":"赤足鷸","bird_name_en":"Common Redshank","scientific_name":"Tringa totanus","occurrence_recording":2744,"migrant_subtype":"summer_visitor","sound_recording":10},{"bird_name_cn":"反嘴鷸","bird_name_en":"Terek Sandpiper","scientific_name":"Xenus cinereus","occurrence_recording":3428,"migrant_subtype":"summer_visitor","sound_recording":18},{"bird_name_cn":"鴛鴦","bird_name_en":"Mandarin Duck","scientific_name":"Aix galericulata","occurrence_recording":1145,"migrant_subtype":"winter_visitor","sound_recording":2},{"bird_name_cn":"歐亞雲雀","bird_name_en":"Eurasian Skylark","scientific_name":"Alauda arvensis","occurrence_recording":1300,"migrant_subtype":"winter_visitor","sound_recording":3},{"bird_name_cn":"小水鴨","bird_name_en":"Eurasian Teal","scientific_name":"Anas crecca","occurrence_recording":8179,"migrant_subtype":"winter_visitor","sound_recording":1},{"bird_name_cn":"綠頭鴨","bird_name_en":"Mallard","scientific_name":"Anas platyrhynchos","occurrence_recording":7384,"migrant_subtype":"winter_visitor","sound_recording":2},{"bird_name_cn":"灰雁","bird_name_en":"Greylag Goose","scientific_name":"Anser anser","occurrence_recording":500,"migrant_subtype":"winter_visitor","sound_recording":1},{"bird_name_cn":"鴻雁","bird_name_en":"Swan Goose","scientific_name":"Anser cygnoides","occurrence_recording":445,"migrant_subtype":"winter_visitor","sound_recording":1},{"bird_name_cn":"寒林豆雁","bird_name_en":"Taiga Bean Goose","scientific_name":"Anser fabalis","occurrence_recording":751,"migrant_subtype":"winter_visitor","sound_recording":4},{"bird_name_cn":"赤喉鷚","bird_name_en":"Red-throated Pipit","scientific_name":"Anthus cervinus","occurrence_recording":813,"migrant_subtype":"winter_visitor","sound_recording":1},{"bird_name_cn":"樹鷚","bird_name_en":"Olive-backed Pipit","scientific_name":"Anthus hodgsoni","occurrence_recording":10759,"migrant_subtype":"winter_visitor","sound_recording":53},{"bird_name_cn":"大花鷚","bird_name_en":"Richard's Pipit","scientific_name":"Anthus richardi","occurrence_recording":1723,"migrant_subtype":"winter_visitor","sound_recording":2},{"bird_name_cn":"白枕鶴","bird_name_en":"White-naped Crane","scientific_name":"Antigone vipio","occurrence_recording":21,"migrant_subtype":"winter_visitor","sound_recording":1},{"bird_name_cn":"蒼鷹","bird_name_en":"Northern Goshawk","scientific_name":"Astur gentilis","occurrence_recording":310,"migrant_subtype":"winter_visitor","sound_recording":0},{"bird_name_cn":"朱連雀","bird_name_en":"Japanese Waxwing","scientific_name":"Bombycilla japonica","occurrence_recording":1047,"migrant_subtype":"winter_visitor","sound_recording":6},{"bird_name_cn":"大麻鷺","bird_name_en":"Eurasian Bittern","scientific_name":"Botaurus stellaris","occurrence_recording":1770,"migrant_subtype":"winter_visitor","sound_recording":2},{"bird_name_cn":"東方鵟","bird_name_en":"Eastern Buzzard","scientific_name":"Buteo japonicus","occurrence_recording":4645,"migrant_subtype":"winter_visitor","sound_recording":3},{"bird_name_cn":"鐵爪鵐","bird_name_en":"Lapland Longspur","scientific_name":"Calcarius lapponicus","occurrence_recording":537,"migrant_subtype":"winter_visitor","sound_recording":1},{"bird_name_cn":"紅嘴鷗","bird_name_en":"Black-headed Gull","scientific_name":"Chroicocephalus ridibundus","occurrence_recording":2681,"migrant_subtype":"winter_visitor","sound_recording":1},{"bird_name_cn":"東方澤鵟","bird_name_en":"Eastern Marsh Harrier","scientific_name":"Circus spilonotus","occurrence_recording":5832,"migrant_subtype":"winter_visitor","sound_recording":1},{"bird_name_cn":"臘嘴雀","bird_name_en":"Hawfinch","scientific_name":"Coccothraustes coccothraustes","occurrence_recording":714,"migrant_subtype":"winter_visitor","sound_recording":9},{"bird_name_cn":"玉頸鴉","bird_name_en":"Collared Crow","scientific_name":"Corvus torquatus","occurrence_recording":6,"migrant_subtype":"winter_visitor","sound_recording":1},{"bird_name_cn":"鵪鶉","bird_name_en":"Japanese Quail","scientific_name":"Coturnix japonica","occurrence_recording":596,"migrant_subtype":"winter_visitor","sound_recording":2},{"bird_name_cn":"小天鵝","bird_name_en":"Tundra Swan","scientific_name":"Cygnus columbianus","occurrence_recording":899,"migrant_subtype":"winter_visitor","sound_recording":4},{"bird_name_cn":"黃嘴天鵝","bird_name_en":"Whooper Swan","scientific_name":"Cygnus cygnus","occurrence_recording":86,"migrant_subtype":"winter_visitor","sound_recording":1},{"bird_name_cn":"黃喉鵐","bird_name_en":"Yellow-throated Bunting","scientific_name":"Emberiza elegans","occurrence_recording":4186,"migrant_subtype":"winter_visitor","sound_recording":27},{"bird_name_cn":"赤胸鵐","bird_name_en":"Chestnut-eared Bunting","scientific_name":"Emberiza fucata","occurrence_recording":2182,"migrant_subtype":"winter_visitor","sound_recording":3},{"bird_name_cn":"葦鵐","bird_name_en":"Pallas's Reed Bunting","scientific_name":"Emberiza pallasi","occurrence_recording":3671,"migrant_subtype":"winter_visitor","sound_recording":3},{"bird_name_cn":"小鵐","bird_name_en":"Little Bunting","scientific_name":"Emberiza pusilla","occurrence_recording":3948,"migrant_subtype":"winter_visitor","sound_recording":7},{"bird_name_cn":"田鵐","bird_name_en":"Rustic Bunting","scientific_name":"Emberiza rustica","occurrence_recording":3335,"migrant_subtype":"winter_visitor","sound_recording":10},{"bird_name_cn":"灰頭黑臉鵐","bird_name_en":"Black-faced Bunting","scientific_name":"Emberiza spodocephala","occurrence_recording":15844,"migrant_subtype":"winter_visitor","sound_recording":29},{"bird_name_cn":"遊隼","bird_name_en":"Peregrine Falcon","scientific_name":"Falco peregrinus","occurrence_recording":2455,"migrant_subtype":"winter_visitor","sound_recording":1},{"bird_name_cn":"紅喉鶲","bird_name_en":"Taiga Flycatcher","scientific_name":"Ficedula albicilla","occurrence_recording":544,"migrant_subtype":"winter_visitor","sound_recording":3},{"bird_name_cn":"紅胸鶲","bird_name_en":"Red-breasted Flycatcher","scientific_name":"Ficedula parva","occurrence_recording":304,"migrant_subtype":"winter_visitor","sound_recording":1},{"bird_name_cn":"花雀","bird_name_en":"Brambling","scientific_name":"Fringilla montifringilla","occurrence_recording":3835,"migrant_subtype":"winter_visitor","sound_recording":8},{"bird_name_cn":"白冠雞","bird_name_en":"Eurasian Coot","scientific_name":"Fulica atra","occurrence_recording":20306,"migrant_subtype":"winter_visitor","sound_recording":11},{"bird_name_cn":"田鷸","bird_name_en":"Common Snipe","scientific_name":"Gallinago gallinago","occurrence_recording":5167,"migrant_subtype":"winter_visitor","sound_recording":2},{"bird_name_cn":"白頭鶴","bird_name_en":"Hooded Crane","scientific_name":"Grus monacha","occurrence_recording":1063,"migrant_subtype":"winter_visitor","sound_recording":2},{"bird_name_cn":"棕耳鵯","bird_name_en":"Brown-eared Bulbul","scientific_name":"Hypsipetes amaurotis","occurrence_recording":752,"migrant_subtype":"winter_visitor","sound_recording":3},{"bird_name_cn":"西伯利亞銀鷗","bird_name_en":"Vega Gull","scientific_name":"Larus vegae","occurrence_recording":2493,"migrant_subtype":"winter_visitor","sound_recording":2},{"bird_name_cn":"羅文鴨","bird_name_en":"Falcated Duck","scientific_name":"Mareca falcata","occurrence_recording":6278,"migrant_subtype":"winter_visitor","sound_recording":5},{"bird_name_cn":"赤頸鴨","bird_name_en":"Eurasian Wigeon","scientific_name":"Mareca penelope","occurrence_recording":4027,"migrant_subtype":"winter_visitor","sound_recording":1},{"bird_name_cn":"赤膀鴨","bird_name_en":"Gadwall","scientific_name":"Mareca strepera","occurrence_recording":4090,"migrant_subtype":"winter_visitor","sound_recording":5},{"bird_name_cn":"白喉磯鶇","bird_name_en":"White-throated Rock Thrush","scientific_name":"Monticola gularis","occurrence_recording":243,"migrant_subtype":"winter_visitor","sound_recording":1},{"bird_name_cn":"灰鶺鴒","bird_name_en":"Grey Wagtail","scientific_name":"Motacilla cinerea","occurrence_recording":3786,"migrant_subtype":"winter_visitor","sound_recording":23},{"bird_name_cn":"東方黃鶺鴒","bird_name_en":"Eastern Yellow Wagtail","scientific_name":"Motacilla tschutschensis","occurrence_recording":7665,"migrant_subtype":"winter_visitor","sound_recording":17},{"bird_name_cn":"灰喉山椒鳥","bird_name_en":"Grey-chinned Minivet","scientific_name":"Pericrocotus solaris","occurrence_recording":128,"migrant_subtype":"winter_visitor","sound_recording":2},{"bird_name_cn":"赤紅山椒鳥","bird_name_en":"Scarlet Minivet","scientific_name":"Pericrocotus speciosus","occurrence_recording":10,"migrant_subtype":"winter_visitor","sound_recording":8},{"bird_name_cn":"琉球山椒鳥","bird_name_en":"Ryukyu Minivet","scientific_name":"Pericrocotus tegimae","occurrence_recording":231,"migrant_subtype":"winter_visitor","sound_recording":6},{"bird_name_cn":"黃腹山雀","bird_name_en":"Yellow-bellied Tit","scientific_name":"Periparus venustulus","occurrence_recording":2863,"migrant_subtype":"winter_visitor","sound_recording":0},{"bird_name_cn":"鸕鷀","bird_name_en":"Great Cormorant","scientific_name":"Phalacrocorax carbo","occurrence_recording":10270,"migrant_subtype":"winter_visitor","sound_recording":1},{"bird_name_cn":"大紅鸛","bird_name_en":"American Flamingo","scientific_name":"Phoenicopterus roseus","occurrence_recording":206,"migrant_subtype":"winter_visitor","sound_recording":0},{"bird_name_cn":"黃尾鴝","bird_name_en":"Daurian Redstart","scientific_name":"Phoenicurus auroreus","occurrence_recording":20757,"migrant_subtype":"winter_visitor","sound_recording":14},{"bird_name_cn":"藍額紅尾鴝","bird_name_en":"Blue-fronted Redstart","scientific_name":"Phoenicurus frontalis","occurrence_recording":88,"migrant_subtype":"winter_visitor","sound_recording":1},{"bird_name_cn":"白頂溪鴝","bird_name_en":"White-capped Redstart","scientific_name":"Phoenicurus leucocephalus","occurrence_recording":147,"migrant_subtype":"winter_visitor","sound_recording":8},{"bird_name_cn":"褐色柳鶯","bird_name_en":"Dusky Warbler","scientific_name":"Phylloscopus fuscatus","occurrence_recording":1951,"migrant_subtype":"winter_visitor","sound_recording":5},{"bird_name_cn":"黃腰柳鶯","bird_name_en":"Pallas's Leaf Warbler","scientific_name":"Phylloscopus proregulus","occurrence_recording":11522,"migrant_subtype":"winter_visitor","sound_recording":43},{"bird_name_cn":"白琵鷺","bird_name_en":"Eurasian Spoonbill","scientific_name":"Platalea leucorodia","occurrence_recording":4647,"migrant_subtype":"winter_visitor","sound_recording":1},{"bird_name_cn":"冠鸊鷉","bird_name_en":"Great Crested Grebe","scientific_name":"Podiceps cristatus","occurrence_recording":8773,"migrant_subtype":"winter_visitor","sound_recording":3},{"bird_name_cn":"戴菊鳥","bird_name_en":"Goldcrest","scientific_name":"Regulus regulus","occurrence_recording":2211,"migrant_subtype":"winter_visitor","sound_recording":10},{"bird_name_cn":"攀雀","bird_name_en":"Chinese Penduline Tit","scientific_name":"Remiz consobrinus","occurrence_recording":3303,"migrant_subtype":"winter_visitor","sound_recording":10},{"bird_name_cn":"黑嘴鷗","bird_name_en":"Saunders's Gull","scientific_name":"Saundersilarus saundersi","occurrence_recording":1889,"migrant_subtype":"winter_visitor","sound_recording":0},{"bird_name_cn":"雜色山雀","bird_name_en":"Varied Tit","scientific_name":"Sittiparus varius","occurrence_recording":421,"migrant_subtype":"winter_visitor","sound_recording":17},{"bird_name_cn":"黃雀","bird_name_en":"Eurasian Siskin","scientific_name":"Spinus spinus","occurrence_recording":3892,"migrant_subtype":"winter_visitor","sound_recording":21},{"bird_name_cn":"歐洲椋鳥","bird_name_en":"Common Starling","scientific_name":"Sturnus vulgaris","occurrence_recording":331,"migrant_subtype":"winter_visitor","sound_recording":1},{"bird_name_cn":"藍尾鴝","bird_name_en":"Red-flanked Bluetail","scientific_name":"Tarsiger cyanurus","occurrence_recording":15017,"migrant_subtype":"winter_visitor","sound_recording":18},{"bird_name_cn":"烏灰鶇","bird_name_en":"Japanese Thrush","scientific_name":"Turdus cardis","occurrence_recording":1356,"migrant_subtype":"winter_visitor","sound_recording":43},{"bird_name_cn":"斑點鶇","bird_name_en":"Dusky Thrush","scientific_name":"Turdus eunomus","occurrence_recording":6997,"migrant_subtype":"winter_visitor","sound_recording":24},{"bird_name_cn":"灰背鶇","bird_name_en":"Grey-backed Thrush","scientific_name":"Turdus hortulorum","occurrence_recording":10542,"migrant_subtype":"winter_visitor","sound_recording":46},{"bird_name_cn":"紅尾鶇","bird_name_en":"Naumann's Thrush","scientific_name":"Turdus naumanni","occurrence_recording":2588,"migrant_subtype":"winter_visitor","sound_recording":2},{"bird_name_cn":"白眉鶇","bird_name_en":"Eyebrowed Thrush","scientific_name":"Turdus obscurus","occurrence_recording":2041,"migrant_subtype":"winter_visitor","sound_recording":60},{"bird_name_cn":"白腹鶇","bird_name_en":"Pale Thrush","scientific_name":"Turdus pallidus","occurrence_recording":15091,"migrant_subtype":"winter_visitor","sound_recording":107},{"bird_name_cn":"白氏地鶇","bird_name_en":"White's Thrush","scientific_name":"Zoothera aurea","occurrence_recording":3526,"migrant_subtype":"winter_visitor","sound_recording":2},{"bird_name_cn":"紅脇繡眼","bird_name_en":"Chestnut-flanked White-eye","scientific_name":"Zosterops erythropleurus","occurrence_recording":18,"migrant_subtype":"winter_visitor","sound_recording":4},{"bird_name_cn":"日菲繡眼","bird_name_en":"Warbling White-eye","scientific_name":"Zosterops japonicus","occurrence_recording":309,"migrant_subtype":"winter_visitor","sound_recording":3},{"bird_name_cn":"雙眉葦鶯","bird_name_en":"Black-browed Reed Warbler","scientific_name":"Acrocephalus bistrigiceps","occurrence_recording":468,"migrant_subtype":"passage_migrant","sound_recording":4},{"bird_name_cn":"磯鷸","bird_name_en":"Common Sandpiper","scientific_name":"Actitis hypoleucos","occurrence_recording":11872,"migrant_subtype":"passage_migrant","sound_recording":25},{"bird_name_cn":"厚嘴葦鶯","bird_name_en":"Thick-billed Warbler","scientific_name":"Arundinax aedon","occurrence_recording":110,"migrant_subtype":"passage_migrant","sound_recording":1},{"bird_name_cn":"黑腹濱鷸","bird_name_en":"Dunlin","scientific_name":"Calidris alpina","occurrence_recording":7161,"migrant_subtype":"passage_migrant","sound_recording":16},{"bird_name_cn":"丹氏濱鷸","bird_name_en":"Temminck's Stint","scientific_name":"Calidris temminckii","occurrence_recording":1062,"migrant_subtype":"passage_migrant","sound_recording":1},{"bird_name_cn":"蠣鴴","bird_name_en":"Eurasian Oystercatcher","scientific_name":"Haematopus ostralegus","occurrence_recording":316,"migrant_subtype":"passage_migrant","sound_recording":1},{"bird_name_cn":"小蝗鶯","bird_name_en":"Pallas's Grasshopper Warbler","scientific_name":"Helopsaltes certhiola","occurrence_recording":92,"migrant_subtype":"passage_migrant","sound_recording":2},{"bird_name_cn":"裏海燕鷗","bird_name_en":"Caspian Tern","scientific_name":"Hydroprogne caspia","occurrence_recording":625,"migrant_subtype":"passage_migrant","sound_recording":1},{"bird_name_cn":"紅尾歌鴝","bird_name_en":"Rufous-tailed Robin","scientific_name":"Larvivora sibilans","occurrence_recording":1145,"migrant_subtype":"passage_migrant","sound_recording":13},{"bird_name_cn":"灰胸秧雞","bird_name_en":"Slaty-breasted Rail","scientific_name":"Lewinia striata","occurrence_recording":74,"migrant_subtype":"passage_migrant","sound_recording":2},{"bird_name_cn":"大杓鷸","bird_name_en":"Eurasian Curlew","scientific_name":"Numenius arquata","occurrence_recording":1948,"migrant_subtype":"passage_migrant","sound_recording":1},{"bird_name_cn":"黃眉柳鶯","bird_name_en":"Yellow-browed Warbler","scientific_name":"Phylloscopus inornatus","occurrence_recording":5787,"migrant_subtype":"passage_migrant","sound_recording":30},{"bird_name_cn":"灰斑鴴","bird_name_en":"Grey Plover","scientific_name":"Pluvialis squatarola","occurrence_recording":2344,"migrant_subtype":"passage_migrant","sound_recording":3},{"bird_name_cn":"白喉紅臀鵯","bird_name_en":"Sooty-headed Bulbul","scientific_name":"Pycnonotus aurigaster","occurrence_recording":147,"migrant_subtype":"passage_migrant","sound_recording":1},{"bird_name_cn":"反嘴鴴","bird_name_en":"Pied Avocet","scientific_name":"Recurvirostra avosetta","occurrence_recording":4273,"migrant_subtype":"passage_migrant","sound_recording":5},{"bird_name_cn":"小環頸鴴","bird_name_en":"Little Ringed Plover","scientific_name":"Thinornis dubius","occurrence_recording":6365,"migrant_subtype":"passage_migrant","sound_recording":0},{"bird_name_cn":"鶴鷸","bird_name_en":"Spotted Redshank","scientific_name":"Tringa erythropus","occurrence_recording":4723,"migrant_subtype":"passage_migrant","sound_recording":6},{"bird_name_cn":"青足鷸","bird_name_en":"Common Greenshank","scientific_name":"Tringa nebularia","occurrence_recording":12093,"migrant_subtype":"passage_migrant","sound_recording":26},{"bird_name_cn":"白腰草鷸","bird_name_en":"Green Sandpiper","scientific_name":"Tringa ochropus","occurrence_recording":4340,"migrant_subtype":"passage_migrant","sound_recording":8},{"bird_name_cn":"緋秧雞","bird_name_en":"Ruddy-breasted Crake","scientific_name":"Zapornia fusca","occurrence_recording":49,"migrant_subtype":"passage_migrant","sound_recording":1}];
+    const birdCategories = [{"title_cn":"常见但不常叫","title_en":"Frequently Seen, Rarely Heard","birds":[{"sci":"Parus cinereus","cn":"白颊山雀","en":"Japanese Tit | Great Tit","type_cn":"留鸟","type_en":"Resident","color":"#76E288","desc_cn":"大型且性格强势的山雀，常见于亚洲多种林地环境，从茂密山林到城市公园都能出现。成鸟具黑色头部、醒目的白色脸颊、白腹中央黑纹和灰色翅；东亚个体肩部略带绿色。幼鸟颜色较暗。叫声丰富，鸣唱明亮，也会发出响亮的短促叫声和粗厉警戒声。","desc_en":"Large and pugnacious, this common tit is found in a wide range of wooded habitats, from dense hill forests to manicured city parks throughout much of Asia. Adult has a flashy white cheek on a black head, a black stripe on a white belly, and gray wings; East Asian birds have a hint of green near the shoulder. Juveniles are duller, replacing the adult’s black with gray. Very vocal; song is a bright “tzi-hei tzi-hei!” or “tzee-tzee-tzee-tzee”; also gives loud chips, seeps, and harsh scolding “tzi-tzi-tzshhhhhh.”"},{"sci":"Ardea alba","cn":"大白鹭","en":"Great Egret","type_cn":"留鸟","type_en":"Resident","color":"#76E288","desc_cn":"大型、修长、长颈的白色鹭类。体型和黑色腿部有助于与其他白鹭区分。全球分布广且较常见，常见于池塘、沼泽、潮间带泥滩等浅水湿地。常单独在浅水中缓慢觅食，也会在食物丰富处聚集，并常与其他鹭类混群繁殖。","desc_en":"Large, lanky, long-necked white heron. Size and black legs help separate from other egrets. Widespread and fairly common across the globe. Bill color varies across range: always yellow in the Americas, black in breeding season elsewhere. Occurs in any shallow wetland, including ponds, marshes, and tidal mudflats. Slowly stalks prey in shallow water. Often seen singly, but sometimes gathers in large numbers where food is plentiful. Breeds in colonies, frequently mixed with other egrets and herons."}]},{"title_cn":"常叫但不常出现","title_en":"Frequently Heard, Rarely Seen","birds":[{"sci":"Eudynamys scolopaceus","cn":"噪鹃","en":"Asian Koel","type_cn":"夏候鸟","type_en":"Summer Visitor","color":"#FFBB1E","desc_cn":"大型杜鹃，各类羽色都很有辨识度，但通常隐蔽，常藏在密树内部，即使在城市、田野等环境也不易看见。雄鸟黑亮、喙暗黄绿色；雌鸟和幼鸟黑褐并带白色斑点和条纹，成鸟红眼。雌鸟会把卵产在乌鸦、伯劳、椋鸟等鸟巢中。鸣声响亮而持续，常为“ko-EL”。","desc_en":"A large cuckoo, distinctive in all plumages, but usually secretive, keeping to the interior of dense trees in many habitats, even inner cities and fields. Adult males glossy black with dull lime-green bill; females and immatures blackish brown with white dots on the wings and strong streaking on head and throat. Adults have ruby-red eyes. Females lay eggs in the nests of other large birds, including crows, shrikes, and starlings. Song is a loud, persistent “ko-EL!” similar to a peacock’s call."},{"sci":"Dendronanthus indicus","cn":"山鹡鸰","en":"Forest Wagtail","type_cn":"夏候鸟","type_en":"Summer Visitor","color":"#FFBB1E","desc_cn":"具有典型翼纹和胸纹的鹡鸰，眉纹明显，胸部常有两道黑色新月形横带；上体褐灰略带绿色，黑色翅上有两道宽白翼斑。栖息于各类林地，常在林间小路觅食，尾部左右摆动；受惊时飞入树中。飞行时发出金属感“pink”叫声，鸣唱为重复的双音节。","desc_en":"A distinctive wagtail with diagnostic wing and breast patterns. It has a prominent, whitish eyebrow with two black crescent-shaped bands on the upper breast; lower one wider when present. Upperparts are brown-gray with a greenish tinge. Two broad white wingbars on an otherwise black wing. Immature is browner, less green above than adult, the breast-bands brownish-black and narrower, the lower one completely or partially missing. Inhabits all kinds of woodlands, foraging on forest paths, swinging its tail side to side (not up and down), and when disturbed, flushing into trees. Call is a metallic “pink” produced in flight. Song is a two-noted “tis-fee” repeated 4-5 times."}]},{"title_cn":"既常出现又常叫","title_en":"Frequently Seen and Heard","birds":[{"sci":"Turdus mandarinus","cn":"中国黑鸫","en":"Chinese Blackbird","type_cn":"留鸟","type_en":"Resident","color":"#76E288","desc_cn":"大型深色鸫类，常见于开阔林地、花园和农田，也是许多城市环境中常见的鸟。常在草坪和田地等开阔处觅食蚯蚓和无脊椎动物。雌雄均具橙色嘴，雄鸟通体黑色，雌鸟深褐色。常在显眼栖木上长时间鸣唱，声音响亮悦耳且个体差异明显，警戒时会发出尖叫或“wuk”声。","desc_en":"Large dark thrush of open forests, gardens, and farms; one of the more common urban birds throughout much of its extensive range. Frequently seen on lawns and fields away from cover, pulling up worms and other invertebrates. Both sexes dark with orange bills, the male black overall, the female dark brown. Sings beautifully from exposed perches throughout the day, a series of loud melodic notes that varies between individuals. Often gives a shrill shriek or a series of “wuk” notes when alarmed or agitated."},{"sci":"Pycnonotus sinensis","cn":"白头翁","en":"Light-vented Bulbul","type_cn":"留鸟","type_en":"Resident","color":"#76E288","desc_cn":"常见于花园、公园和森林的鸣禽。成鸟上体暗橄榄色、下体白色，头部具黑白相间图案；幼鸟上体暗褐、下体白色，缺少成鸟头部花纹。常见鸣唱为清亮的四音节串联，是城市绿地中容易听见的鸟声之一。","desc_en":"Common songbird of gardens, parks, and forests. Adult dark olive above, white below, with black-and-white head pattern. Hainan subspecies has a blackish head with white limited to ear patch. Juvenile dull brown above (greenish in wings), white below, lacking head pattern. Hybrids with Styan’s Bulbul appear intermediate, with the moustachial stripe and white feathers around the eye of Styan’s but at least partly white nape of Light-vented. Common song is a ringing series of four notes, “wee-wee-der-wee.”"}]},{"title_cn":"既不常出现又不常叫","title_en":"Rarely Seen or Heard","birds":[{"sci":"Corvus torquatus","cn":"玉颈鸦","en":"Collared Crow","type_cn":"冬候鸟","type_en":"Winter Visitor","color":"#58CCEC","desc_cn":"开阔农田、田野等环境中很有辨识度的鸦类，成鸟黑色，白色后颈连接至白色胸带。外观略似达乌里寒鸦成鸟，但后者体型更小、更紧凑，浅色羽区延伸至腹部。叫声比小嘴乌鸦和大嘴乌鸦更高。","desc_en":"By far the most distinctive crow of farmland, fields, and other open spaces: adults black with white hindneck connecting to white breast band. Superficially similar to adult Daurian Jackdaw, but the latter is more compact and smaller, with pale plumage extending through the belly. Call is a higher-pitched cawing than that of Carrion and Large-billed Crows."},{"sci":"Nymphicus hollandicus","cn":"鸡尾鹦鹉","en":"Cockatiel","type_cn":"夏候鸟","type_en":"Summer Visitor","color":"#FFBB1E","desc_cn":"小型凤头鹦鹉，具长而尖的尾。停栖时，雄鸟淡黄色脸部、羽冠和橙色颊斑十分醒目；飞行时暗色翼尖和白色翼斑与灰色背部形成明显对比。常发出悦耳而快速的哨音“wee-rooo”。","desc_en":"Tiny cockatoo with a long pointed tail. When perched, the yellowish face and crest and orange cheek patch of the male are distinctive. In flight has dark wing tips and bold white wing panels contrasting with a gray back. Calls frequently with a tuneful fast-whistled \"wee-rooo\"."}]}];
+    const labels = {"zh":{"pageTitle":"上海鸟类记录综合分析","pageSubtitle":"基于出现记录与发声记录，从居留类型、记录分布、声景差异和典型物种四个角度观察上海鸟类。","langZh":"中文","langEn":"English","bubbleTitle":"环形气泡图：记录数量分布","bubbleDesc":"选项卡切换出现记录与发声记录；圆形大小代表记录数量，颜色代表居留类型。","bubbleNote":"提示：鼠标悬停在圆形上可查看中文名、居留类型、出现记录与发声记录。","bubbleInsightTitle":"知识洞察","occPieTitle":"出现记录总数占比","soundPieTitle":"发声记录总数占比","bubbleInsightPoint":"留鸟在出现记录中占据绝对优势，约 781,550 条，远高于冬候鸟、夏候鸟和旅鸟。出现记录更受全年可见性、稳定分布和城市可接近性的影响。","bubbleInsightReason":"但在发声记录中，留鸟虽仍最高，约 971 条，优势却明显减弱。声音记录并不完全取决于出现频率，而更受鸣唱季节、叫声强度和可识别度影响。","bubbleInsightRefs":"参考文献：Catchpole, C. K., & Slater, P. J. B. (2008). Bird Song: Biological Themes and Variations (2nd ed.). Cambridge University Press. Schieck, J. (1997). Biased detection of bird vocalizations affects comparisons of bird abundance among forested habitats. The Condor, 99(1), 179-190. https://doi.org/10.2307/1370238 Sullivan, B. L., Wood, C. L., Iliff, M. J., Bonney, R. E., Fink, D., & Kelling, S. (2009). eBird: A citizen-based bird observation network in the biological sciences. Biological Conservation, 142(10), 2282-2292. https://doi.org/10.1016/j.biocon.2009.05.006","barTitle":"气泡条形图：发声记录 × 出现记录","barDesc":"选项卡切换居留类型；纵轴为物种中文名，横轴为发声记录数量，圆形大小代表出现记录数量。","barNote":"提示：鼠标悬停在圆形上可查看物种中文名、居留类型、出现记录与发声记录。","barInsightTitle":"知识洞察","barInsightPoint":"留鸟的发声记录差异最大，本质上是“全年可记录机会”被物种差异进一步放大。留鸟全年都在本地出现，但中國黑鶲、白頭翁、斯氏繡眼等城市适应性强、分布广、靠近人类活动区，因此比隐蔽、低密度或栖息地受限的留鸟更容易被反复录到。","barInsightReason":"少数高值鸟并不只是“数量多”，而是同时具备“声音明显 + 易接近 + 识别价值高”的特征。例如中國黑鶲具有复杂鸣唱和模仿能力，研究显示城市中的中國黑鶲甚至会模仿电动车警报声，说明其声音行为本身就更容易引起记录者关注。","barInsightRefs":"参考文献：Fu et al. “Chinese Blackbirds (Turdus mandarinus) mimic electric moped sounds...” Avian Research, 2025. Schieck, J. “Biased Detection of Bird Vocalizations Affects Comparisons of Bird Abundance Among Forested Habitats.” The Condor, 1997. Bird Survey Guidelines, “Acoustic survey methods.”","scatterTitle":"散点图：出现记录 × 发声记录","scatterDesc":"横轴为出现记录，纵轴为发声记录；颜色表示居留类型，标注圆点为典型物种。","scatterInsightTitle":"知识洞察","scatterInsightPoint1":"不同居留类型的鸟类在“出现频率”和“发声记录”之间呈现出明显分化：冬候鸟更容易集中在“常出现但不常叫”区域，夏候鸟更容易出现在“常叫但不常出现”区域，而留鸟则更常占据“既常出现又常叫”的区域。","scatterInsightReason1":"这种差异首先与季节性行为有关。夏候鸟多在繁殖季来到本地，鸣唱、求偶和领域宣示行为更频繁；但夏季植被茂密，鸟体更容易被遮挡，因此容易形成“听见多、看见少”的记录结构。","scatterInsightPoint2":"冬候鸟则相反，许多物种在冬季集中于水域、滩涂、林缘或开阔地，且冬季植被相对稀疏，视觉发现率较高；但越冬期主要以觅食和保存能量为主，繁殖性鸣唱较弱，因此更容易表现为“常出现但不常叫”。","scatterInsightReason2":"留鸟全年稳定分布，出现记录可以持续累积，并且部分城市适应性强的物种，如白头翁、中国黑鸫等，既常见又鸣唱活跃，因此在“既常出现又常叫”的区域中更占优势。","scatterInsightRefs":"参考文献：Catchpole, C. K., & Slater, P. J. B. (2008). Bird song: Biological themes and variations (2nd ed.). Cambridge University Press. Mouton, J. C., & Martin, T. E. (2019). Nest structure affects auditory and visual detectability, but not predation risk, in a tropical songbird community. Functional Ecology, 33(11), 2149-2158. doi:10.1111/1365-2435.13405","cardsTitle":"典型物种图鉴","cardsDesc":"4个象限均选取2种典型鸟类，对应到4列","cnName":"中文名","enName":"英文名","residence":"居留类型","occurrence":"出现记录","sound":"发声记录","xAxis":"发声记录数量","yAxisScatter":"发声记录数量","xAxisScatter":"出现记录数量","metrics":{"occurrence_recording":"出现记录","sound_recording":"发声记录"},"subtypes":{"resident":"留鸟","summer_visitor":"夏候鸟","winter_visitor":"冬候鸟","passage_migrant":"旅鸟"},"scatterHint":"点击散点图中的典型物种圆点或名称，可跳转到对应图鉴卡片。","bubbleInsightPoint2":"夏候鸟在繁殖季鸣唱集中，冬候鸟虽繁殖性鸣唱较弱，但仍会产生联系叫声、警戒叫声等声音记录，因此共同削弱了留鸟在声音维度上的主导地位。","bubbleInsightReason2":"出现记录更接近“谁更常被看见”，发声记录更接近“谁更容易在特定季节被听见和识别”。","barInsightPoint2":"迁徙性鸟类虽然记录窗口较短，但声音常成为识别关键，因此也会出现局部高值。如黃眉柳鶯、野鴝、白腹鶲等体型小或活动隐蔽，视觉识别难度较高，鸟友更倾向通过叫声确认种类；声学监测研究也指出，不同鸟种的发声可探测性并不相同，会显著影响记录结果。","barInsightReason2":"发声记录数量不能简单等同于“鸟叫得多”，而应理解为生态习性、城市可接近性、声音辨识度和记录者偏好共同作用的结果。这也解释了为什么同一居留类型内部会出现明显头部物种，而留鸟由于全年暴露在记录系统中，这种差异被放大得最明显。","scatterScaleNote":"刻度说明：横轴从 0 开始，并采用分段对数式拉伸；0-2,000 占据左半区，2,000 以上占据右半区，因此 2,000 参考线位于图表中间。由于出现记录从个位数到数万条跨度很大，若按常规数值等分，低记录物种会被挤在左侧难以区分，所以使用 0、10、50、100、200、500、2,000 等非等距刻度。","scatterInsightPoint3":"综合来看，鸟类在散点图四个象限中的位置，并不只反映数量多少，而是由迁徙季节、繁殖行为、栖息地开阔度、城市可接近性和声音可识别度共同决定的。","cardsInsightTitle":"典型物种知识洞察","cardsInsightSeenRareTitle":"常出现但不常叫","cardsInsightSeenRare":"大白鹭和白颊山雀都容易被观察到，但发声记录不一定同步增加。大白鹭体型大、常出现在湿地、水域等开阔环境，视觉发现率高；但其叫声多为粗哑叫声，主要在繁殖、争斗或受惊时明显，因此容易“看见多、录音少”。白颊山雀是常见留鸟，活动于林地、城市绿地等环境，但个体小、叫声短促，声音记录相对不如中国黑鸫、白头翁这类高鸣唱度鸟种突出。","cardsInsightHeardRareTitle":"常叫但不常出现","cardsInsightHeardRare":"噪鹃和山鹡鸰都属于“声音存在感强于视觉存在感”的鸟。噪鹃繁殖季叫声响亮、重复性强，香港鸟类资料也将其描述为非常善鸣、叫声可持续升高，因此即使出现记录不算最高，也容易积累发声记录。山鹡鸰偏森林生境，常在树上或林下活动，视觉发现率受遮挡影响；其繁殖期雄鸟会鸣唱，因此更容易形成“听见多、看见少”的结构。","cardsInsightSeenHeardTitle":"既常出现又常叫","cardsInsightSeenHeard":"中国黑鸫和白头翁都是城市/近人环境中常见的留鸟，全年记录机会高，同时鸣唱活跃、声音辨识度强。中国黑鸫的城市鸣唱和模仿能力已有研究记录，例如可模仿电动车报警声，说明其声音行为本身容易被记录者关注。白头翁也常见于城市绿地和居民区，Macaulay Library/eBird 中有大量音频记录，说明它既容易被看到，也容易被声音确认。","cardsInsightRareTitle":"既不常出现又不常叫","cardsInsightRare":"玉颈鸦和鸡尾鹦鹉更像是“低频记录/边缘记录”的代表。玉颈鸦在你的数据中作为冬候鸟，出现窗口和空间范围都较受限，因此出现与发声记录都偏低；鸡尾鹦鹉原产澳大利亚，在中国语境下更可能是逸养或偶发记录，并非稳定野外种群，所以自然会落入“出现少、发声少”的象限。","cardsInsightRefs":"参考文献：Catchpole, C. K., & Slater, P. J. B. (2008). Bird Song: Biological Themes and Variations (2nd ed.). Cambridge University Press. Schieck, J. (1997). Biased detection of bird vocalizations affects comparisons of bird abundance among forested habitats. The Condor, 99(1), 179-190. https://doi.org/10.2307/1370238 Fu, C., et al. (2025). Chinese Blackbirds (Turdus mandarinus) mimic electric moped sounds with lower consistency and frequencies. Avian Research, 16(2), 100231. https://doi.org/10.1016/j.avrs.2025.100231 Sullivan, B. L., Wood, C. L., Iliff, M. J., Bonney, R. E., Fink, D., & Kelling, S. (2009). eBird: A citizen-based bird observation network in the biological sciences. Biological Conservation, 142(10), 2282-2292. https://doi.org/10.1016/j.biocon.2009.05.006"},"en":{"pageTitle":"Shanghai Bird Records Integrated Analysis","pageSubtitle":"A combined view of Shanghai birds through residency type, record distribution, acoustic contrast, and representative species.","langZh":"中文","langEn":"English","bubbleTitle":"Circular Bubble Chart: Record Distribution","bubbleDesc":"Switch between occurrence records and sound records. Circle size represents record count, and colour represents residency type.","bubbleNote":"Tip: hover over a circle to see scientific_name, Chinese name, English name and record counts.","bubbleInsightTitle":"Knowledge Insights","occPieTitle":"Share of Total Occurrence Records","soundPieTitle":"Share of Total Sound Records","bubbleInsightPoint":"Resident birds dominate occurrence records, with about 781,550 records, far above winter visitors, summer visitors, and passage migrants. Occurrence records are shaped more by year-round visibility, stable distribution, and urban accessibility.","bubbleInsightReason":"In sound records, residents still rank highest at about 971 records, but their advantage is much weaker. Sound records do not simply follow occurrence frequency; they are also shaped by vocal seasonality, call strength, and identifiability.","bubbleInsightRefs":"References: Catchpole, C. K., & Slater, P. J. B. (2008). Bird Song: Biological Themes and Variations (2nd ed.). Cambridge University Press. Schieck, J. (1997). Biased detection of bird vocalizations affects comparisons of bird abundance among forested habitats. The Condor, 99(1), 179-190. https://doi.org/10.2307/1370238 Sullivan, B. L., Wood, C. L., Iliff, M. J., Bonney, R. E., Fink, D., & Kelling, S. (2009). eBird: A citizen-based bird observation network in the biological sciences. Biological Conservation, 142(10), 2282-2292. https://doi.org/10.1016/j.biocon.2009.05.006","barTitle":"Bubble Bar Chart: Sound Records × Occurrence Records","barDesc":"Switch residency type by tab. The Y-axis uses scientific_name, the X-axis shows sound_recording, and circle size represents occurrence_recording.","barNote":"Tip: hover over a circle to see species name, residency type, occurrence records and sound records.","barInsightTitle":"Knowledge Insights","barInsightPoint":"Resident birds show the largest spread in sound records. This is essentially because year-round recording opportunities are amplified by species-level differences. Residents are present locally throughout the year, but Chinese Blackbird, Light-vented Bulbul, and Swinhoe’s White-eye are more urban-adapted, widespread, and close to human activity areas, so they are recorded repeatedly more often than secretive, low-density, or habitat-limited residents.","barInsightReason":"A few high-value species are not simply “more numerous”; they combine clear vocal signals, easy access, and high identification value. For example, Chinese Blackbird has complex song and mimicry ability, and research reports urban Chinese Blackbirds mimicking electric moped alarm sounds, showing that their vocal behavior itself is more likely to attract recorder attention.","barInsightRefs":"References: Fu et al. “Chinese Blackbirds (Turdus mandarinus) mimic electric moped sounds...” Avian Research, 2025. Schieck, J. “Biased Detection of Bird Vocalizations Affects Comparisons of Bird Abundance Among Forested Habitats.” The Condor, 1997. Bird Survey Guidelines, “Acoustic survey methods.”","scatterTitle":"Scatter Plot: Occurrence Records × Sound Records","scatterDesc":"The X-axis shows occurrence records, the Y-axis shows sound records, colors encode residency type, and labeled points mark representative species.","scatterInsightTitle":"Knowledge Insights","scatterInsightPoint1":"Different residency types diverge clearly between occurrence frequency and sound records: winter visitors more often concentrate in the “frequently seen but rarely heard” area, summer visitors more often appear in the “frequently heard but rarely seen” area, while residents more often occupy the “frequently seen and heard” area.","scatterInsightReason1":"This difference is first related to seasonal behavior. Many summer visitors arrive during the breeding season, when song, courtship, and territorial behavior are more frequent. Dense summer vegetation also hides individuals more easily, creating a record structure of being heard more often than seen.","scatterInsightPoint2":"Winter visitors show the opposite tendency. Many species concentrate in wetlands, tidal flats, forest edges, or open habitats, and sparse winter vegetation improves visual detectability. But during the wintering period, birds mainly forage and conserve energy, with weaker breeding song, so they more often appear as “frequently seen but rarely heard”.","scatterInsightReason2":"Residents are stably distributed year-round, so occurrence records accumulate continuously. Some urban-adapted species, such as Light-vented Bulbul and Chinese Blackbird, are both common and vocally active, giving residents an advantage in the “frequently seen and heard” area.","scatterInsightRefs":"References: Catchpole, C. K., & Slater, P. J. B. (2008). Bird song: Biological themes and variations (2nd ed.). Cambridge University Press. Mouton, J. C., & Martin, T. E. (2019). Nest structure affects auditory and visual detectability, but not predation risk, in a tropical songbird community. Functional Ecology, 33(11), 2149-2158. doi:10.1111/1365-2435.13405","cardsTitle":"Representative Species Profiles","cardsDesc":"Each of the four quadrants selects two representative species, corresponding to four columns.","cnName":"Chinese name","enName":"English name","residence":"Residency type","occurrence":"Occurrence records","sound":"Sound records","xAxis":"Sound records: sound_recording","yAxisScatter":"Sound Records","xAxisScatter":"Occurrence Records","metrics":{"occurrence_recording":"Occurrence records","sound_recording":"Sound records"},"subtypes":{"resident":"Resident","summer_visitor":"Summer Visitor","winter_visitor":"Winter Visitor","passage_migrant":"Passage Migrant"},"scatterHint":"Click a labeled representative species point or label in the scatter plot to jump to its profile card.","bubbleInsightPoint2":"Summer visitors vocalize intensively during the breeding season. Winter visitors have weaker breeding song locally, but they still produce contact calls, alarm calls, and other vocal records, together weakening resident dominance in the sound dimension.","bubbleInsightReason2":"Occurrence records are closer to “who is more often seen”, while sound records are closer to “who is easier to hear and identify in a particular season”.","scatterScaleNote":"Scale note: the X-axis starts at 0 and uses a segmented logarithmic stretch. Values from 0 to 2,000 occupy the left half, and values above 2,000 occupy the right half, so the 2,000 reference line stays centered. Because occurrence records range from single digits to tens of thousands, equal numeric spacing would compress low-record species on the left; therefore the ticks use non-uniform values such as 0, 10, 50, 100, 200, 500, and 2,000.","scatterInsightPoint3":"Overall, a species’ position in the four quadrants reflects not only abundance, but also migration season, breeding behavior, habitat openness, urban accessibility, and acoustic identifiability.","barInsightPoint2":"Migratory birds have shorter recording windows, but sound is often crucial for identification, so local high values can still appear. Species such as Yellow-browed Warbler, Siberian Rubythroat, and Pale Thrush are small or visually hidden, making observers more likely to confirm them by calls. Acoustic monitoring studies also show that vocal detectability differs substantially among species and can shape record outcomes.","barInsightReason2":"Sound-record counts should not be read simply as “how much birds call”. They are the combined result of ecology, urban accessibility, acoustic distinctiveness, and recorder preference. This explains why strong head species appear within the same residency type, and why residents, being exposed to the recording system year-round, show the strongest internal contrast.","cardsInsightTitle":"Representative Species Insights","cardsInsightSeenRareTitle":"Frequently Seen, Rarely Heard","cardsInsightSeenRare":"Great Egret and Japanese Tit are both easy to observe, but sound records do not necessarily increase in parallel. Great Egret is large and often appears in open wetlands and water bodies, so visual detection is high; its rough calls are most obvious during breeding, conflict, or disturbance, making it easy to see often but record less often. Japanese Tit is a common resident in woodland and urban green space, but it is small and its calls are short, so its sound records are less prominent than highly vocal species such as Chinese Blackbird and Light-vented Bulbul.","cardsInsightHeardRareTitle":"Frequently Heard, Rarely Seen","cardsInsightHeardRare":"Asian Koel and Forest Wagtail both have a stronger acoustic presence than visual presence. Asian Koel gives loud, repetitive breeding-season calls and is often described as highly vocal, so sound records can accumulate even when occurrence records are not the highest. Forest Wagtail favors forest habitats and often moves in trees or shaded understory, where visual detection is blocked; breeding males sing, producing a hear-more-see-less pattern.","cardsInsightSeenHeardTitle":"Frequently Seen and Heard","cardsInsightSeenHeard":"Chinese Blackbird and Light-vented Bulbul are common residents in urban or near-human environments, giving them year-round recording opportunities. Both are vocally active and acoustically distinctive. Research has documented urban Chinese Blackbirds mimicking electric moped alarm sounds, suggesting that their vocal behavior itself attracts recorder attention. Light-vented Bulbul is also common in urban green spaces and residential areas, and Macaulay Library/eBird contains many audio records, showing that it is easy to see and easy to confirm by sound.","cardsInsightRareTitle":"Rarely Seen or Heard","cardsInsightRare":"Collared Crow and Cockatiel represent low-frequency or edge-case records. In this dataset, Collared Crow is treated as a winter visitor, so its seasonal window and spatial range are limited, resulting in low occurrence and sound records. Cockatiel is native to Australia and, in the Chinese context, is more likely an escaped or incidental record rather than a stable wild population, so it naturally falls into the rarely seen and rarely heard quadrant.","cardsInsightRefs":"References: Catchpole, C. K., & Slater, P. J. B. (2008). Bird Song: Biological Themes and Variations (2nd ed.). Cambridge University Press. Schieck, J. (1997). Biased detection of bird vocalizations affects comparisons of bird abundance among forested habitats. The Condor, 99(1), 179-190. https://doi.org/10.2307/1370238 Fu, C., et al. (2025). Chinese Blackbirds (Turdus mandarinus) mimic electric moped sounds with lower consistency and frequencies. Avian Research, 16(2), 100231. https://doi.org/10.1016/j.avrs.2025.100231 Sullivan, B. L., Wood, C. L., Iliff, M. J., Bonney, R. E., Fink, D., & Kelling, S. (2009). eBird: A citizen-based bird observation network in the biological sciences. Biological Conservation, 142(10), 2282-2292. https://doi.org/10.1016/j.biocon.2009.05.006"}};
+    const subtypeOrder = ["resident","summer_visitor","winter_visitor","passage_migrant"];
+    const colorMap = {"summer_visitor":"#FFBB1E","winter_visitor":"#58CCEC","resident":"#76E288","passage_migrant":"#8FAAFF"};
+    const occMedian = 2000;
+    const sndMedian = 5;
+    const highlightSpecies = ["Ardea alba", "Parus cinereus", "Pycnonotus sinensis", "Turdus mandarinus", "Eudynamys scolopaceus", "Dendronanthus indicus", "Corvus torquatus", "Nymphicus hollandicus"];
+    const state = { lang: 'en', subtype: 'resident', metric: 'occurrence_recording' };
+
+    const bySci = Object.fromEntries(DATA.map(d => [d.scientific_name, d]));
+    const fmt = n => Number(n || 0).toLocaleString(state.lang === 'zh' ? 'zh-CN' : 'en-US');
+    const L = () => labels[state.lang] || labels.zh;
+    const t = key => L()[key] || key;
+    const subtypeLabel = key => (L().subtypes && L().subtypes[key]) || key;
+    const metricLabel = key => (L().metrics && L().metrics[key]) || key;
+    const color = key => colorMap[key] || '#999';
+    const esc = value => String(value ?? '').replace(/[&<>"']/g, ch => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[ch]));
+    const log10 = value => Math.log10(Math.max(Number(value || 0), 0.5));
+
+    function svgEl(tag, attrs = {}) {
+      const node = document.createElementNS('http://www.w3.org/2000/svg', tag);
+      Object.entries(attrs).forEach(([key, value]) => node.setAttribute(key, value));
+      return node;
+    }
+    function clear(id) { const node = document.getElementById(id); if (node) node.innerHTML = ''; return node; }
+    function showTooltip(event, d) {
+      const tip = document.getElementById('tooltip');
+      tip.style.left = event.clientX + 'px';
+      tip.style.top = event.clientY + 'px';
+      tip.style.opacity = 1;
+      if (state.lang === 'zh') {
+        tip.innerHTML = '<strong>' + esc(d.bird_name_cn || d.scientific_name) + '</strong>' +
+          '<div><span class="muted">' + esc(t('residence')) + ':</span> ' + esc(subtypeLabel(d.migrant_subtype)) + '</div>' +
+          '<div><span class="muted">' + esc(t('occurrence')) + ':</span> ' + fmt(d.occurrence_recording) + '</div>' +
+          '<div><span class="muted">' + esc(t('sound')) + ':</span> ' + fmt(d.sound_recording) + '</div>';
+      } else {
+        tip.innerHTML = '<strong>' + esc(d.scientific_name) + '</strong>' +
+          '<div><span class="muted">' + esc(t('cnName')) + ':</span> ' + esc(d.bird_name_cn || '-') + '</div>' +
+          '<div><span class="muted">' + esc(t('enName')) + ':</span> ' + esc(d.bird_name_en || '-') + '</div>' +
+          '<div><span class="muted">' + esc(t('residence')) + ':</span> ' + esc(subtypeLabel(d.migrant_subtype)) + '</div>' +
+          '<div><span class="muted">' + esc(t('occurrence')) + ':</span> ' + fmt(d.occurrence_recording) + '</div>' +
+          '<div><span class="muted">' + esc(t('sound')) + ':</span> ' + fmt(d.sound_recording) + '</div>';
+      }
+    }
+    function hideTooltip() { document.getElementById('tooltip').style.opacity = 0; }
+    function bindCircle(circle, d) {
+      circle.classList.add('chart-circle');
+      circle.addEventListener('mousemove', event => { circle.classList.add('is-hovered'); showTooltip(event, d); });
+      circle.addEventListener('mouseleave', () => { circle.classList.remove('is-hovered'); hideTooltip(); });
+    }
+    function setLanguage(lang) {
+      state.lang = lang;
+      document.documentElement.lang = lang === 'zh' ? 'zh-CN' : 'en';
+      document.body.className = 'lang-' + lang;
+      document.querySelectorAll('[data-i18n]').forEach(node => {
+        const key = node.getAttribute('data-i18n');
+        if (L()[key]) node.textContent = L()[key];
+      });
+      document.getElementById('zhBtn').classList.toggle('active', lang === 'zh');
+      document.getElementById('enBtn').classList.toggle('active', lang === 'en');
+    }
+    function renderTabs() {
+      const metricTabs = clear('metricTabs');
+      ['occurrence_recording', 'sound_recording'].forEach(metric => {
+        const button = document.createElement('button');
+        button.className = metric === state.metric ? 'active' : '';
+        button.textContent = metricLabel(metric);
+        button.onclick = () => { state.metric = metric; renderTabs(); renderBubbleChart(); };
+        metricTabs.appendChild(button);
+      });
+      const residenceTabs = clear('residenceTabs');
+      subtypeOrder.forEach(subtype => {
+        const button = document.createElement('button');
+        button.className = subtype === state.subtype ? 'active' : '';
+        button.textContent = subtypeLabel(subtype);
+        button.onclick = () => { state.subtype = subtype; renderTabs(); renderBarChart(); };
+        residenceTabs.appendChild(button);
+      });
+      const legend = clear('legend');
+      legend.innerHTML = subtypeOrder.map(subtype => '<span class="legend-item"><span class="swatch" style="background:' + color(subtype) + '"></span><span>' + esc(subtypeLabel(subtype)) + '</span></span>').join('');
+    }
+    function renderBubbleChart() {
+      const box = clear('bubbleChart');
+      const boxWidth = Math.max(box.clientWidth || 1000, 700);
+      const diameter = Math.min(Math.max(boxWidth - 24, 700), 1080);
+      const svg = svgEl('svg', { width: diameter, height: diameter, viewBox: '0 0 ' + diameter + ' ' + diameter });
+      box.appendChild(svg);
+
+      const total = DATA.reduce((sum, d) => sum + Number(d[state.metric] || 0), 0);
+      const targetArea = Math.PI * Math.pow(diameter * 0.47, 2) * (state.metric === 'occurrence_recording' ? 0.94 : 0.76);
+      const valueSum = DATA.reduce((sum, d) => sum + Math.max(Number(d[state.metric] || 0), 1), 0) || 1;
+      const radiusScale = Math.sqrt(targetArea / (Math.PI * valueSum));
+      const centerX = diameter / 2;
+      const centerY = diameter / 2 + 18;
+      const sorted = [...DATA].sort((a, b) => Number(b[state.metric] || 0) - Number(a[state.metric] || 0));
+      const nodes = [];
+      let lastDistance = 0;
+      let previousValue = Infinity;
+      const goldenAngle = 2.399963229728653;
+      const padding = 0.15;
+
+      sorted.forEach((d, i) => {
+        const rawValue = Number(d[state.metric] || 0);
+        const value = Math.max(rawValue, 1);
+        const radius = Math.max(3.8, Math.sqrt(value) * radiusScale * (state.metric === 'occurrence_recording' ? 1.12 : 1));
+        if (i === 0) {
+          nodes.push({ d, value: rawValue, radius, x: centerX, y: centerY, distance: 0 });
+          previousValue = rawValue;
+          return;
+        }
+
+        const strictStep = rawValue < previousValue ? Math.max(0.28, radius * 0.018) : 0;
+        const minDistance = lastDistance + strictStep;
+        const baseAngle = i * goldenAngle;
+        const searchLimit = diameter * 1.9;
+        const ringStep = Math.max(0.9, Math.min(4.2, radius * 0.16));
+        let chosen = null;
+
+        for (let distance = minDistance; distance <= searchLimit && !chosen; distance += ringStep) {
+          const samples = Math.max(36, Math.ceil((2 * Math.PI * Math.max(distance, 1)) / (radius * 0.72 + 5)));
+          for (let s = 0; s < samples; s++) {
+            const angle = baseAngle + s * (2 * Math.PI / samples);
+            const x = centerX + Math.cos(angle) * distance;
+            const y = centerY + Math.sin(angle) * distance;
+            let ok = true;
+            for (const other of nodes) {
+              const minGap = radius + other.radius + padding;
+              if ((x - other.x) ** 2 + (y - other.y) ** 2 < minGap ** 2) {
+                ok = false;
+                break;
+              }
+            }
+            if (ok) {
+              chosen = { x, y, distance };
+              break;
+            }
+          }
+        }
+
+        if (!chosen) {
+          const distance = lastDistance + Math.max(0.3, radius * 0.2) + padding;
+          const angle = baseAngle;
+          chosen = {
+            x: centerX + Math.cos(angle) * distance,
+            y: centerY + Math.sin(angle) * distance,
+            distance
+          };
+        }
+
+        lastDistance = Math.max(lastDistance, chosen.distance);
+        previousValue = rawValue;
+        nodes.push({ d, value: rawValue, radius, x: chosen.x, y: chosen.y, distance: chosen.distance });
+      });
+
+      const bounds = nodes.reduce((acc, n) => ({
+        minX: Math.min(acc.minX, n.x - n.radius),
+        maxX: Math.max(acc.maxX, n.x + n.radius),
+        minY: Math.min(acc.minY, n.y - n.radius),
+        maxY: Math.max(acc.maxY, n.y + n.radius)
+      }), { minX: Infinity, maxX: -Infinity, minY: Infinity, maxY: -Infinity });
+      const spanLeft = centerX - bounds.minX;
+      const spanRight = bounds.maxX - centerX;
+      const spanTop = centerY - bounds.minY;
+      const spanBottom = bounds.maxY - centerY;
+      const fit = Math.min(
+        (centerX - 14) / Math.max(spanLeft, 1),
+        (diameter - centerX - 14) / Math.max(spanRight, 1),
+        (centerY - 44) / Math.max(spanTop, 1),
+        (diameter - centerY - 10) / Math.max(spanBottom, 1),
+        1
+      );
+
+      nodes.forEach(n => {
+        n.x = centerX + (n.x - centerX) * fit;
+        n.y = centerY + (n.y - centerY) * fit;
+        n.radius *= fit;
+        n.distance *= fit;
+      });
+
+      nodes.forEach(({ x, y, radius, d, value }) => {
+        const circle = svgEl('circle', { cx: x, cy: y, r: radius, fill: color(d.migrant_subtype), 'fill-opacity': 0.78, stroke: '#F5F5F5', 'stroke-width': radius > 20 ? 1.6 : 0.9 });
+        bindCircle(circle, d);
+        svg.appendChild(circle);
+        if (radius >= 30) {
+          const name = svgEl('text', { x, y: y - 2, 'text-anchor': 'middle', fill: '#1F1F1F', 'font-size': Math.min(15, Math.max(9, radius / 4.5)), 'font-weight': 800, 'pointer-events': 'none' });
+          const label = state.lang === 'zh' ? (d.bird_name_cn || d.scientific_name) : d.scientific_name;
+          name.textContent = label.length > 18 ? label.slice(0, 16) + '...' : label;
+          svg.appendChild(name);
+        }
+        if (radius >= 44) {
+          const valueText = svgEl('text', { x, y: y + 17, 'text-anchor': 'middle', fill: '#333333', 'font-size': Math.min(13, Math.max(8, radius / 5.5)), 'pointer-events': 'none' });
+          valueText.textContent = fmt(value);
+          svg.appendChild(valueText);
+        }
+      });
+
+      const title = svgEl('text', { x: 18, y: 28, fill: '#666', 'font-size': 13, 'font-weight': 700 });
+      title.textContent = metricLabel(state.metric) + ' | ' + fmt(total) + ' ' + (state.lang === 'zh' ? '\u6761\u8bb0\u5f55' : 'records');
+      svg.appendChild(title);
+    }
+    function aggregate(metric) {
+      const rows = subtypeOrder.map(subtype => ({ subtype, value: DATA.filter(d => d.migrant_subtype === subtype).reduce((sum, d) => sum + Number(d[metric] || 0), 0) }));
+      const total = rows.reduce((sum, d) => sum + d.value, 0) || 1;
+      return rows.map(d => ({ ...d, total }));
+    }
+    function renderPie(id, metric) {
+      const box = clear(id);
+      const width = Math.max(box.clientWidth || 280, 240), height = 240, r = 92, cx = width / 2, cy = height / 2;
+      const svg = svgEl('svg', { width, height, viewBox: '0 0 ' + width + ' ' + height });
+      box.appendChild(svg);
+      let start = -Math.PI / 2;
+      aggregate(metric).forEach(row => {
+        const end = start + (row.value / row.total) * Math.PI * 2;
+        const large = end - start > Math.PI ? 1 : 0;
+        const x0 = cx + Math.cos(start) * r, y0 = cy + Math.sin(start) * r;
+        const x1 = cx + Math.cos(end) * r, y1 = cy + Math.sin(end) * r;
+        const path = svgEl('path', { d: 'M ' + cx + ' ' + cy + ' L ' + x0 + ' ' + y0 + ' A ' + r + ' ' + r + ' 0 ' + large + ' 1 ' + x1 + ' ' + y1 + ' Z', fill: color(row.subtype), stroke: '#F5F5F5', 'stroke-width': 2, class: 'pie-slice' });
+        path.addEventListener('mousemove', event => {
+          path.classList.add('is-hovered');
+          const tip = document.getElementById('tooltip');
+          tip.style.left = event.clientX + 'px'; tip.style.top = event.clientY + 'px'; tip.style.opacity = 1;
+          tip.innerHTML = '<strong>' + esc(subtypeLabel(row.subtype)) + '</strong><div><span class="muted">' + esc(metricLabel(metric)) + ':</span> ' + fmt(row.value) + '</div><div><span class="muted">' + (state.lang === 'zh' ? '占比' : 'Share') + ':</span> ' + ((row.value / row.total) * 100).toFixed(1) + '%</div>';
+        });
+        path.addEventListener('mouseleave', () => { path.classList.remove('is-hovered'); hideTooltip(); });
+        svg.appendChild(path);
+        if (row.value / row.total >= 0.06) {
+          const mid = (start + end) / 2;
+          const label = svgEl('text', { x: cx + Math.cos(mid) * r * 0.58, y: cy + Math.sin(mid) * r * 0.58 + 4, 'text-anchor': 'middle', fill: '#1F1F1F', 'font-size': 11, 'font-weight': 800, 'pointer-events': 'none' });
+          label.textContent = ((row.value / row.total) * 100).toFixed(0) + '%';
+          svg.appendChild(label);
+        }
+        start = end;
+      });
+    }
+    function renderBarChart() {
+      const box = clear('barChart');
+      const rows = DATA.filter(d => d.migrant_subtype === state.subtype).sort((a, b) => Number(b.sound_recording || 0) - Number(a.sound_recording || 0) || Number(b.occurrence_recording || 0) - Number(a.occurrence_recording || 0));
+      const width = Math.max(box.clientWidth || 1120, 1120);
+      const margin = { top: 38, right: 120, bottom: 70, left: 260 };
+      const rowHeight = 30, height = margin.top + margin.bottom + rows.length * rowHeight, innerWidth = width - margin.left - margin.right;
+      const maxSound = Math.max(...rows.map(d => Number(d.sound_recording || 0)), 1);
+      const maxOcc = Math.max(...DATA.map(d => Number(d.occurrence_recording || 0)), 1);
+      const svg = svgEl('svg', { width, height, viewBox: '0 0 ' + width + ' ' + height });
+      box.appendChild(svg);
+      for (let i = 0; i <= 5; i++) {
+        const x = margin.left + (i / 5) * innerWidth;
+        svg.appendChild(svgEl('line', { x1: x, y1: margin.top, x2: x, y2: height - margin.bottom, stroke: '#DDDDDD', 'stroke-dasharray': '3 4' }));
+        const tick = svgEl('text', { x, y: height - margin.bottom + 22, 'text-anchor': 'middle', fill: '#666', 'font-size': 11 });
+        tick.textContent = fmt(Math.round(maxSound * i / 5));
+        svg.appendChild(tick);
+      }
+      rows.forEach((d, i) => {
+        const y = margin.top + i * rowHeight + rowHeight / 2;
+        const x = margin.left + (Number(d.sound_recording || 0) / maxSound) * innerWidth;
+        const radius = 4 + Math.sqrt(Number(d.occurrence_recording || 0) / maxOcc) * 20;
+        svg.appendChild(svgEl('line', { x1: margin.left, y1: y, x2: x, y2: y, stroke: 'rgba(60,60,60,0.18)', 'stroke-width': 1.2 }));
+        const name = svgEl('text', { x: margin.left - 12, y: y + 4, 'text-anchor': 'end', fill: '#2D2D2D', 'font-size': 11.5 });
+        name.textContent = state.lang === 'zh' ? (d.bird_name_cn || d.scientific_name) : d.scientific_name; svg.appendChild(name);
+        const circle = svgEl('circle', { cx: x, cy: y, r: radius, fill: color(d.migrant_subtype), 'fill-opacity': 0.78, stroke: '#F5F5F5', 'stroke-width': 1.4 });
+        bindCircle(circle, d); svg.appendChild(circle);
+        const value = svgEl('text', { x: x + radius + 6, y: y + 4, fill: '#666', 'font-size': 11 });
+        value.textContent = fmt(d.sound_recording); svg.appendChild(value);
+      });
+      const axisLabel = svgEl('text', { x: margin.left + innerWidth / 2, y: height - 22, 'text-anchor': 'middle', fill: '#666', 'font-size': 13, 'font-weight': 700 });
+      axisLabel.textContent = t('xAxis'); svg.appendChild(axisLabel);
+    }
+    function renderScatterChart() {
+      const box = clear('scatterPlot');
+      const width = Math.max(box.clientWidth || 1000, 780), height = Math.max(box.clientHeight || 680, 620);
+      const margin = { top: 58, right: 48, bottom: 96, left: 78 }, innerWidth = width - margin.left - margin.right, innerHeight = height - margin.top - margin.bottom;
+      const xBreak = 2000, xMax = 400000;
+      const yMin = 0.5, yMax = Math.max(...DATA.map(d => d.sound_recording || 0.5), 150);
+      const sx = value => {
+        const v = Math.max(0, Math.min(Number(value) || 0, xMax));
+        if (v <= xBreak) {
+          return margin.left + (log10(v + 1) / log10(xBreak + 1)) * innerWidth * 0.5;
+        }
+        return margin.left + innerWidth * 0.5 + ((log10(v) - log10(xBreak)) / (log10(xMax) - log10(xBreak))) * innerWidth * 0.5;
+      };
+      const sy = value => margin.top + innerHeight - (log10(value) - log10(yMin)) / (log10(yMax) - log10(yMin)) * innerHeight;
+      const svg = svgEl('svg', { width, height, viewBox: '0 0 ' + width + ' ' + height });
+      box.appendChild(svg);
+      [0,10,50,100,200,500,1000,2000,5000,10000,20000,50000,100000].filter(v => v <= xMax).forEach((v, i) => {
+        const x = sx(v);
+        svg.appendChild(svgEl('line', { x1: x, y1: margin.top, x2: x, y2: margin.top + innerHeight, stroke: '#DCDCDC', 'stroke-dasharray': '3 4' }));
+        const label = svgEl('text', { x, y: margin.top + innerHeight + (i % 2 ? 36 : 22), 'text-anchor': v === 0 ? 'start' : 'middle', fill: '#666', 'font-size': 10.5 });
+        label.textContent = fmt(v); svg.appendChild(label);
+      });
+      [0.5,1,2,5,10,20,50,100,150].filter(v => v <= yMax).forEach(v => {
+        const y = sy(v);
+        svg.appendChild(svgEl('line', { x1: margin.left, y1: y, x2: margin.left + innerWidth, y2: y, stroke: '#DCDCDC', 'stroke-dasharray': '3 4' }));
+        const label = svgEl('text', { x: margin.left - 10, y: y + 4, 'text-anchor': 'end', fill: '#666', 'font-size': 11 });
+        label.textContent = v === 0.5 ? '0' : String(v); svg.appendChild(label);
+      });
+      svg.appendChild(svgEl('line', { x1: margin.left, y1: margin.top + innerHeight, x2: margin.left + innerWidth, y2: margin.top + innerHeight, stroke: '#999' }));
+      svg.appendChild(svgEl('line', { x1: margin.left, y1: margin.top, x2: margin.left, y2: margin.top + innerHeight, stroke: '#999' }));
+      const refX = sx(occMedian), refY = sy(sndMedian);
+      svg.appendChild(svgEl('line', { x1: refX, y1: margin.top, x2: refX, y2: margin.top + innerHeight, stroke: '#777', 'stroke-width': 1.15, 'stroke-dasharray': '5 4' }));
+      svg.appendChild(svgEl('line', { x1: margin.left, y1: refY, x2: margin.left + innerWidth, y2: refY, stroke: '#777', 'stroke-width': 1.15, 'stroke-dasharray': '5 4' }));
+      const xRefLabel = svgEl('text', { x: refX + 6, y: margin.top + 14, fill: '#555', 'font-size': 11, 'font-weight': 700 });
+      xRefLabel.textContent = state.lang === 'zh' ? '出现阈值 2,000' : 'Occurrence threshold 2,000'; svg.appendChild(xRefLabel);
+      const yRefLabel = svgEl('text', { x: margin.left + innerWidth - 8, y: refY - 7, 'text-anchor': 'end', fill: '#555', 'font-size': 11, 'font-weight': 700 });
+      yRefLabel.textContent = state.lang === 'zh' ? '发声阈值 5' : 'Sound threshold 5'; svg.appendChild(yRefLabel);
+      DATA.forEach(d => {
+        const isHighlight = highlightSpecies.includes(d.scientific_name);
+        const yValue = d.sound_recording > 0 ? d.sound_recording : 0.5;
+        const circle = svgEl('circle', { cx: sx(d.occurrence_recording), cy: sy(yValue), r: isHighlight ? 7.5 : 4.8, fill: color(d.migrant_subtype), 'fill-opacity': 0.82, stroke: isHighlight ? '#333' : 'none', 'stroke-width': isHighlight ? 1.2 : 0 });
+        bindCircle(circle, d);
+        if (isHighlight) {
+          circle.style.cursor = 'pointer';
+          circle.addEventListener('click', () => jumpToCard(d.scientific_name));
+        }
+        svg.appendChild(circle);
+        if (isHighlight) {
+          const idx = highlightSpecies.indexOf(d.scientific_name);
+          const offsets = [[-10,-12],[10,-12],[10,20],[-10,20],[-10,-12],[10,20],[-10,20],[10,-12]][idx] || [10, -12];
+          const name = svgEl('text', { x: sx(d.occurrence_recording) + offsets[0], y: sy(yValue) + offsets[1], 'text-anchor': offsets[0] < 0 ? 'end' : 'start', fill: '#222', 'font-size': 10, 'font-weight': 800 });
+          name.textContent = state.lang === 'zh' ? (d.bird_name_cn || d.scientific_name) : d.scientific_name;
+          name.style.cursor = 'pointer';
+          name.addEventListener('click', () => jumpToCard(d.scientific_name));
+          svg.appendChild(name);
+        }
+      });
+      const title = svgEl('text', { x: width / 2, y: 28, 'text-anchor': 'middle', fill: '#333', 'font-size': 18, 'font-weight': 700 });
+      title.textContent = state.lang === 'zh' ? '出现记录与发声记录：上海鸟类分析' : 'Occurrence vs. Sound Recording Analysis'; svg.appendChild(title);
+      const xLabel = svgEl('text', { x: margin.left + innerWidth / 2, y: height - 18, 'text-anchor': 'middle', fill: '#666', 'font-size': 13, 'font-weight': 700 });
+      xLabel.textContent = t('xAxisScatter'); svg.appendChild(xLabel);
+      const yLabel = svgEl('text', { x: 18, y: margin.top + innerHeight / 2, transform: 'rotate(-90 18 ' + (margin.top + innerHeight / 2) + ')', 'text-anchor': 'middle', fill: '#666', 'font-size': 13, 'font-weight': 700 });
+      yLabel.textContent = t('yAxisScatter'); svg.appendChild(yLabel);
+    }
+    function cardId(sci) {
+      return 'card-' + sci.replace(/[^a-zA-Z0-9]+/g, '-').replace(/^-|-$/g, '');
+    }
+    function jumpToCard(sci) {
+      const card = document.getElementById(cardId(sci));
+      if (!card) return;
+      card.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      card.classList.add('flash');
+      setTimeout(() => card.classList.remove('flash'), 1800);
+    }
+    function normalizeCardHeights() {
+      const cards = Array.from(document.querySelectorAll('.bird-card'));
+      cards.forEach(card => { card.style.height = 'auto'; });
+      if (window.matchMedia('(max-width: 680px)').matches) return;
+      const max = Math.ceil(Math.max(...cards.map(card => card.scrollHeight)));
+      cards.forEach(card => { card.style.height = (max + 2) + 'px'; });
+    }
+    function renderCards() {
+      const container = clear('birdCards');
+      container.innerHTML = '<div class="bird-columns">' + birdCategories.map(cat => '<div class="category-group"><div class="category-title"><span class="cn-text">' + esc(cat.title_cn) + '</span><span class="en-text">' + esc(cat.title_en) + '</span></div><div class="cards-grid">' + cat.birds.map(bird => '<div class="bird-card" id="' + cardId(bird.sci) + '" data-sci="' + esc(bird.sci) + '"><div class="card-img-wrapper"><div class="card-tag cn-text" style="background-color:' + bird.color + '">' + esc(bird.type_cn) + '</div><div class="card-tag en-text" style="background-color:' + bird.color + '">' + esc(bird.type_en) + '</div><img src="photo/' + bird.sci.replace(' ', '_') + '.jpg" alt="' + esc(bird.sci) + '"></div><div class="bird-card-body"><h3 class="bird-card-title cn-text">' + esc(bird.cn) + '</h3><h3 class="bird-card-title en-text">' + esc(bird.en) + '</h3><p class="bird-card-subtitle">' + esc(bird.sci) + '</p><div class="bird-card-desc cn-text">' + esc(bird.desc_cn) + '</div><div class="bird-card-desc en-text">' + esc(bird.desc_en) + '</div><audio controls><source src="sound/' + bird.sci.replace(' ', '_') + '.mp3" type="audio/mpeg"></audio></div></div>').join('') + '</div></div>').join('') + '</div>';
+      requestAnimationFrame(normalizeCardHeights);
+      setTimeout(normalizeCardHeights, 250);
+    }
+    function renderAll() {
+      setLanguage(state.lang);
+      renderTabs();
+      renderBubbleChart();
+      renderPie('occPieChart', 'occurrence_recording');
+      renderPie('soundPieChart', 'sound_recording');
+      renderBarChart();
+      renderScatterChart();
+      renderCards();
+      normalizeCardHeights();
+    }
+    document.getElementById('zhBtn').addEventListener('click', () => { state.lang = 'zh'; renderAll(); });
+    document.getElementById('enBtn').addEventListener('click', () => { state.lang = 'en'; renderAll(); });
+    renderAll();
+    window.addEventListener('resize', () => { clearTimeout(window.__birdResize); window.__birdResize = setTimeout(renderAll, 150); });
+  </script>
+</body>
+</html>

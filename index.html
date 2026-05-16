@@ -1020,6 +1020,60 @@
       font-size:13px;
       line-height:1.65;
     }
+    .teammate-bubble-card{
+      margin-top:22px;
+      overflow:hidden;
+      position:relative;
+    }
+    .teammate-bubble-card::before{
+      content:"";
+      position:absolute;
+      inset:0;
+      pointer-events:none;
+      background:
+        linear-gradient(115deg, transparent 0 18%, rgba(143,170,255,.08) 18.08%, transparent 18.22% 46%, rgba(255,187,30,.08) 46.08%, transparent 46.22%),
+        linear-gradient(0deg, rgba(255,255,255,.55), rgba(255,255,255,0));
+      opacity:.85;
+    }
+    .teammate-bubble-card > *{position:relative}
+    .teammate-bubble-head{
+      display:flex;
+      justify-content:space-between;
+      align-items:flex-start;
+      gap:18px;
+      flex-wrap:wrap;
+      margin-bottom:14px;
+    }
+    .teammate-bubble-head h2{
+      margin:0 0 8px;
+      font-size:24px;
+    }
+    .teammate-bubble-head p{
+      margin:0;
+      color:var(--muted);
+      line-height:1.7;
+      max-width:1040px;
+    }
+    .teammate-frame-shell{
+      border:1px solid var(--line);
+      border-radius:var(--radius);
+      background:rgba(255,255,255,.72);
+      overflow:hidden;
+      box-shadow:inset 0 1px 0 rgba(255,255,255,.78);
+    }
+    .teammate-frame{
+      width:100%;
+      min-height:940px;
+      border:0;
+      display:block;
+      background:#F5F5F5;
+    }
+    .teammate-frame-note{
+      margin-top:10px;
+      color:var(--muted);
+      font-size:13px;
+      line-height:1.65;
+    }
     @media (max-width: 1280px){
       .landing-title{font-size:72px}
       .landing-heat-preview{right:2%;opacity:.76}
@@ -1037,6 +1091,7 @@
       .landing-metrics{grid-template-columns:1fr}
       .landing-label{display:none}
       .landing-scroll{display:none}
+      .teammate-frame{min-height:1200px}
       .toolbar-grid{grid-template-columns:1fr}
       .hero h1{font-size:28px}
       .topbar{display:block}
@@ -1081,6 +1136,7 @@
       <div class="landing-actions">
         <a class="landing-cta primary" id="landingStart" href="#mainExplorer"><span id="landingStartText">开始探索</span><span class="arrow">↓</span></a>
         <a class="landing-cta" id="landingLineLink" href="#cycleLineSection">查看折线图</a>
+        <a class="landing-cta" id="landingBubbleLink" href="#teammateBubbleSection">查看综合气泡图</a>
         <a class="landing-cta" id="landingInsightLink" href="#storiesMount">查看洞察</a>
       </div>
       <div class="landing-metrics" aria-label="Dataset summary">
@@ -1189,6 +1245,20 @@
       <p class="cycle-note" id="cycleLineNote">说明：当前项目文件只保留了 2009-2026 合并后的 48 时段 reporting rate，没有保留逐年切片；因此年度下拉先显示合并版。拿到含年份的原始 eBird 表后，可以无缝扩展为逐年切换。</p>
     </section>
 
+    <section class="card teammate-bubble-card" id="teammateBubbleSection">
+      <div class="teammate-bubble-head">
+        <div>
+          <h2 id="teammateBubbleHeading">综合气泡分析</h2>
+          <p id="teammateBubbleLead">队友页面已合并到这里：包含出现记录/发声记录气泡图、声音记录条形气泡图、四象限散点图，以及带图片和声音的典型物种卡片。</p>
+        </div>
+        <a class="landing-cta" id="teammateBubbleOpen" href="Bird_Integrated_Bubble_Comprehensive.html">单独打开</a>
+      </div>
+      <div class="teammate-frame-shell">
+        <iframe class="teammate-frame" id="teammateBubbleFrame" src="Bird_Integrated_Bubble_Comprehensive.html" title="Shanghai Bird Records Integrated Analysis" loading="lazy"></iframe>
+      </div>
+      <p class="teammate-frame-note" id="teammateBubbleNote">图片与声音资源已放在同目录的 photo/ 和 sound/ 文件夹中；如果浏览器限制自动播放，点击卡片中的播放器即可手动播放。</p>
+    </section>
+
     <section class="card insight-shell" id="storiesMount">
       <div class="insight-head">
         <div>
@@ -1207,7 +1277,7 @@
   <div class="tooltip" id="tooltip"></div>
 
   <script src="web_bird_acoustic_heatmap_data.js"></script>
-  <script src="web_bird_acoustic_heatmap_app.js?v=20260516-cyclelink1"></script>
+  <script src="web_bird_acoustic_heatmap_app.js?v=20260517-bubblemerge1"></script>
   <script>
     (function () {
       function fallbackToggleLanguage() {

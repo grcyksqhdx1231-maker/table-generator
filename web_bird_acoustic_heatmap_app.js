@@ -451,6 +451,21 @@
     setText("#landingStartText", landing.start);
     setText("#landingLineLink", landing.line);
     setText("#landingInsightLink", landing.insight);
+    setText("#landingBubbleLink", state.lang === "zh" ? "查看综合气泡图" : "View bubble analysis");
+    setText("#teammateBubbleHeading", state.lang === "zh" ? "综合气泡分析" : "Integrated Bubble Analysis");
+    setText(
+      "#teammateBubbleLead",
+      state.lang === "zh"
+        ? "队友页面已合并到这里：包含出现记录/发声记录气泡图、声音记录条形气泡图、四象限散点图，以及带图片和声音的典型物种卡片。"
+        : "The teammate page is merged here: occurrence/sound bubble chart, sound-record bubble bar chart, quadrant scatter plot, and representative species cards with photos and audio.",
+    );
+    setText("#teammateBubbleOpen", state.lang === "zh" ? "单独打开" : "Open separately");
+    setText(
+      "#teammateBubbleNote",
+      state.lang === "zh"
+        ? "图片与声音资源已放在同目录的 photo/ 和 sound/ 文件夹中；如果浏览器限制自动播放，点击卡片中的播放器即可手动播放。"
+        : "Photo and sound assets are placed in the same-directory photo/ and sound/ folders. If the browser blocks autoplay, use the audio controls on each card.",
+    );
     setText("#landingMetricA", landing.metricA);
     setText("#landingMetricB", landing.metricB);
     setText("#landingMetricC", landing.metricC);
@@ -1373,6 +1388,25 @@
   }
 
   window.switchBirdHeatmapLanguage = switchLanguage;
+
+  const teammateFrame = qs("#teammateBubbleFrame");
+  if (teammateFrame) {
+    const syncTeammateFrameHeight = () => {
+      try {
+        const doc = teammateFrame.contentDocument || teammateFrame.contentWindow?.document;
+        if (!doc) return;
+        const height = Math.max(doc.documentElement.scrollHeight, doc.body?.scrollHeight || 0, 940);
+        teammateFrame.style.height = `${height + 24}px`;
+      } catch (error) {
+        teammateFrame.style.height = "1400px";
+      }
+    };
+    teammateFrame.addEventListener("load", () => {
+      syncTeammateFrameHeight();
+      window.setTimeout(syncTeammateFrameHeight, 400);
+      window.setTimeout(syncTeammateFrameHeight, 1200);
+    });
+  }
 
   document.addEventListener("click", (event) => {
     const link = event.target.closest("a[data-nav-href]");

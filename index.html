@@ -97,7 +97,7 @@
       z-index:4;
       display:flex;
       align-items:center;
-      justify-content:space-between;
+      justify-content:flex-start;
       gap:16px;
     }
     .landing-brand{
@@ -155,16 +155,9 @@
       font-size:17px;
       line-height:1.85;
     }
-    .landing-actions{
-      display:flex;
-      flex-wrap:wrap;
-      gap:12px;
-      margin-top:32px;
-      align-items:center;
-    }
     .landing-index{
       width:min(900px,100%);
-      margin-top:22px;
+      margin-top:34px;
       display:grid;
       grid-template-columns:repeat(4,minmax(0,1fr));
       gap:8px;
@@ -202,6 +195,11 @@
       border-color:rgba(0,0,0,.34);
       background:rgba(255,255,255,.82);
       box-shadow:0 18px 40px rgba(0,0,0,.09);
+    }
+    .landing-index-card.active{
+      border-color:rgba(0,0,0,.48);
+      background:rgba(255,255,255,.9);
+      box-shadow:0 22px 48px rgba(0,0,0,.12),0 0 0 4px rgba(255,187,30,.18);
     }
     .landing-index-card strong{
       display:block;
@@ -247,33 +245,6 @@
       justify-content:center;
       background:rgba(255,255,255,.52);
       border:1px solid rgba(0,0,0,.12);
-    }
-    .landing-metrics{
-      display:grid;
-      grid-template-columns:repeat(3,minmax(0,1fr));
-      gap:1px;
-      width:min(760px,100%);
-      margin-top:42px;
-      border:1px solid var(--line);
-      background:var(--line);
-    }
-    .landing-metric{
-      min-height:86px;
-      padding:14px;
-      background:rgba(255,255,255,.62);
-      backdrop-filter:blur(12px);
-    }
-    .landing-metric strong{
-      display:block;
-      font-size:26px;
-      line-height:1;
-      margin-bottom:8px;
-    }
-    .landing-metric span{
-      display:block;
-      color:var(--muted);
-      font-size:12px;
-      line-height:1.45;
     }
     .landing-scene{
       position:absolute;
@@ -370,6 +341,77 @@
       background:linear-gradient(180deg,rgba(0,0,0,.42),transparent);
       animation:scrollCue 1.7s ease-in-out infinite;
     }
+    .scroll-dock{
+      position:fixed;
+      right:18px;
+      top:50%;
+      z-index:50;
+      display:grid;
+      gap:8px;
+      width:min(218px,calc(100vw - 36px));
+      padding:10px;
+      border:1px solid rgba(0,0,0,.13);
+      border-radius:var(--radius);
+      background:rgba(255,255,255,.78);
+      box-shadow:0 18px 46px rgba(0,0,0,.12),0 1px 0 rgba(255,255,255,.82) inset;
+      backdrop-filter:blur(18px);
+      opacity:0;
+      pointer-events:none;
+      transform:translate(24px,-50%);
+      transition:opacity .22s ease,transform .22s ease;
+    }
+    body.show-dock .scroll-dock{
+      opacity:1;
+      pointer-events:auto;
+      transform:translate(0,-50%);
+    }
+    .scroll-dock::before{
+      content:"";
+      position:absolute;
+      left:0;
+      top:0;
+      bottom:0;
+      width:4px;
+      border-radius:var(--radius) 0 0 var(--radius);
+      background:linear-gradient(180deg,var(--resident),var(--summer),var(--winter),var(--passage));
+      transform:scaleY(var(--dock-progress,.08));
+      transform-origin:top;
+      transition:transform .12s linear;
+    }
+    .dock-link{
+      width:100%;
+      display:grid;
+      grid-template-columns:32px minmax(0,1fr);
+      gap:8px;
+      align-items:center;
+      border:1px solid transparent;
+      border-radius:6px;
+      background:transparent;
+      color:var(--ink);
+      padding:8px;
+      font:inherit;
+      text-align:left;
+      cursor:pointer;
+      transition:background .16s ease,border-color .16s ease,transform .16s ease;
+    }
+    .dock-link strong{
+      color:var(--muted);
+      font-size:11px;
+      line-height:1;
+    }
+    .dock-link span{
+      overflow:hidden;
+      text-overflow:ellipsis;
+      white-space:nowrap;
+      font-size:12px;
+      line-height:1.25;
+    }
+    .dock-link:hover,.dock-link.active{
+      background:rgba(255,255,255,.82);
+      border-color:rgba(0,0,0,.16);
+      transform:translateX(-2px);
+    }
+    .dock-link.active strong{color:#111}
     @keyframes routeFlow{
       to{stroke-dashoffset:-104}
     }
@@ -1144,10 +1186,10 @@
       .landing-lead{font-size:15px}
       .landing-heat-preview{position:relative;right:auto;top:auto;width:100%;max-width:none;margin-top:34px;transform:none}
       .landing-routes{inset:auto -18% 4% 20%;width:110%;height:42%;opacity:.62}
-      .landing-metrics{grid-template-columns:1fr}
       .landing-index{grid-template-columns:1fr}
       .landing-label{display:none}
       .landing-scroll{display:none}
+      .scroll-dock{display:none}
       .teammate-frame{min-height:1200px}
       .toolbar-grid{grid-template-columns:1fr}
       .hero h1{font-size:28px}
@@ -1163,7 +1205,6 @@
   <section class="landing-home" id="landingHome" aria-labelledby="landingTitle">
     <nav class="landing-nav" aria-label="Landing navigation">
       <div class="landing-brand" id="landingBrand">Shanghai Birds / Acoustic Cycle</div>
-      <a class="landing-cta" id="landingTopLink" href="#mainExplorer">进入热图</a>
     </nav>
     <div class="landing-scene" aria-hidden="true">
       <div class="landing-heat-preview">
@@ -1190,12 +1231,6 @@
       <div class="landing-kicker" id="landingKicker">Shanghai bird acoustic visualization</div>
       <h1 class="landing-title" id="landingTitle">从记录到声音，探索上海鸟类的年周期</h1>
       <p class="landing-lead" id="landingLead">滚动进入 48 时段热图，在同一套逻辑下比较物种出现、发声和差值，并从留鸟、旅鸟、夏候鸟、冬候鸟的节律里读出上海作为生态节点的角色。</p>
-      <div class="landing-actions">
-        <a class="landing-cta primary" id="landingStart" href="#mainExplorer" data-scroll-target="#mainExplorer"><span id="landingStartText">开始探索</span><span class="arrow">↓</span></a>
-        <a class="landing-cta" id="landingLineLink" href="#cycleLineSection" data-scroll-target="#cycleLineSection">查看折线图</a>
-        <a class="landing-cta" id="landingBubbleLink" href="#teammateBubbleSection" data-scroll-target="#teammateBubbleSection">查看综合气泡图</a>
-        <a class="landing-cta" id="landingInsightLink" href="#storiesMount" data-scroll-target="#storiesMount">查看洞察</a>
-      </div>
       <nav class="landing-index" id="landingIndex" aria-label="Visualization section index">
         <a class="landing-index-card" href="#mainExplorer" data-scroll-target="#mainExplorer">
           <strong id="landingIndexHeatmap">记录热图</strong>
@@ -1226,23 +1261,33 @@
           <span id="landingIndexInsightDesc">热图证据与生态解释</span>
         </a>
       </nav>
-      <div class="landing-metrics" aria-label="Dataset summary">
-        <div class="landing-metric">
-          <strong>229</strong>
-          <span id="landingMetricA">个物种进入清洗后的可视化</span>
-        </div>
-        <div class="landing-metric">
-          <strong>48</strong>
-          <span id="landingMetricB">个年内阶段用于对齐观测与发声</span>
-        </div>
-        <div class="landing-metric">
-          <strong>3</strong>
-          <span id="landingMetricC">张热图：出现、发声、差值</span>
-        </div>
-      </div>
     </div>
     <div class="landing-scroll" id="landingScroll">Scroll</div>
   </section>
+
+  <nav class="scroll-dock" id="scrollDock" aria-label="Scroll section navigation">
+    <button class="dock-link" type="button" data-scroll-target="#mainExplorer">
+      <strong>01</strong><span id="dockHeatmap">记录热图</span>
+    </button>
+    <button class="dock-link" type="button" data-scroll-target="#cycleLineSection">
+      <strong>02</strong><span id="dockLine">活动频率折线</span>
+    </button>
+    <button class="dock-link" type="button" data-scroll-target="#teammateBubbleSection" data-frame-target="bubbleModule">
+      <strong>03</strong><span id="dockBubble">环形气泡图</span>
+    </button>
+    <button class="dock-link" type="button" data-scroll-target="#teammateBubbleSection" data-frame-target="barModule">
+      <strong>04</strong><span id="dockBar">气泡条形图</span>
+    </button>
+    <button class="dock-link" type="button" data-scroll-target="#teammateBubbleSection" data-frame-target="scatterModule">
+      <strong>05</strong><span id="dockScatter">四象限散点图</span>
+    </button>
+    <button class="dock-link" type="button" data-scroll-target="#teammateBubbleSection" data-frame-target="cardsModule">
+      <strong>06</strong><span id="dockCards">典型物种图鉴</span>
+    </button>
+    <button class="dock-link" type="button" data-scroll-target="#storiesMount">
+      <strong>07</strong><span id="dockInsight">Knowledge Insight</span>
+    </button>
+  </nav>
 
   <div class="wrap" id="mainExplorer">
     <section class="hero">
@@ -1367,7 +1412,7 @@
   <script defer src="https://cdn.jsdelivr.net/npm/gsap@3.12.5/dist/ScrollTrigger.min.js"></script>
   <script defer src="https://cdn.jsdelivr.net/npm/gsap@3.12.5/dist/ScrollToPlugin.min.js"></script>
   <script src="web_bird_acoustic_heatmap_data.js"></script>
-  <script src="web_bird_acoustic_heatmap_app.js?v=20260517-unified1"></script>
+  <script src="web_bird_acoustic_heatmap_app.js?v=20260517-scrollnav1"></script>
   <script>
     (function () {
       function fallbackToggleLanguage() {

@@ -407,16 +407,9 @@
       state.lang === "zh"
         ? {
             brand: "上海鸟类 / 声景年周期",
-            topLink: "进入热图",
             kicker: "Shanghai bird acoustic visualization",
             title: "从记录到声音，探索上海鸟类的年周期",
             lead: "滚动进入 48 时段热图，在同一套逻辑下比较物种出现、发声和差值，并从留鸟、旅鸟、夏候鸟、冬候鸟的节律里读出上海作为生态节点的角色。",
-            start: "开始探索",
-            line: "查看折线图",
-            insight: "查看知识洞察",
-            metricA: "个物种进入清洗后的可视化",
-            metricB: "个年内阶段用于对齐观测与发声",
-            metricC: "张热图：出现、发声、差值",
             scroll: "向下滚动",
             labelA: "夏候鸟 / Summer",
             labelB: "冬候鸟 / Winter",
@@ -438,16 +431,9 @@
           }
         : {
             brand: "Shanghai Birds / Acoustic Cycle",
-            topLink: "Enter heatmaps",
             kicker: "Shanghai bird acoustic visualization",
             title: "Explore Shanghai birds through records and sound",
             lead: "Scroll into the 48-period heatmaps to compare occurrence, acoustic records, and their difference under one shared logic, then read Shanghai's ecological role through residents, passage migrants, summer visitors, and winter visitors.",
-            start: "Start exploring",
-            line: "View line chart",
-            insight: "View knowledge insight",
-            metricA: "cleaned species in the visualization",
-            metricB: "within-year periods aligning occurrence and sound",
-            metricC: "heatmaps: occurrence, sound, difference",
             scroll: "Scroll",
             labelA: "Summer visitors",
             labelB: "Winter visitors",
@@ -472,14 +458,9 @@
       if (node) node.textContent = value;
     };
     setText("#landingBrand", landing.brand);
-    setText("#landingTopLink", landing.topLink);
     setText("#landingKicker", landing.kicker);
     setText("#landingTitle", landing.title);
     setText("#landingLead", landing.lead);
-    setText("#landingStartText", landing.start);
-    setText("#landingLineLink", landing.line);
-    setText("#landingInsightLink", landing.insight);
-    setText("#landingBubbleLink", state.lang === "zh" ? "查看综合气泡图" : "View bubble analysis");
     setText("#teammateBubbleHeading", state.lang === "zh" ? "综合气泡分析" : "Integrated Bubble Analysis");
     setText(
       "#teammateBubbleLead",
@@ -494,9 +475,6 @@
         ? "图片与声音资源已放在同目录的 photo/ 和 sound/ 文件夹中；如果浏览器限制自动播放，点击卡片中的播放器即可手动播放。"
         : "Photo and sound assets are placed in the same-directory photo/ and sound/ folders. If the browser blocks autoplay, use the audio controls on each card.",
     );
-    setText("#landingMetricA", landing.metricA);
-    setText("#landingMetricB", landing.metricB);
-    setText("#landingMetricC", landing.metricC);
     setText("#landingScroll", landing.scroll);
     setText("#landingLabelA", landing.labelA);
     setText("#landingLabelB", landing.labelB);
@@ -515,6 +493,13 @@
     setText("#landingIndexCardsDesc", landing.indexCardsDesc);
     setText("#landingIndexInsight", landing.indexInsight);
     setText("#landingIndexInsightDesc", landing.indexInsightDesc);
+    setText("#dockHeatmap", landing.indexHeatmap);
+    setText("#dockLine", landing.indexLine);
+    setText("#dockBubble", landing.indexBubble);
+    setText("#dockBar", landing.indexBar);
+    setText("#dockScatter", landing.indexScatter);
+    setText("#dockCards", landing.indexCards);
+    setText("#dockInsight", landing.indexInsight);
   }
 
   function insightText(insight) {
@@ -1434,6 +1419,7 @@
 
   const teammateFrame = qs("#teammateBubbleFrame");
   let scrollLinksBound = false;
+  let dockBound = false;
   let scrollAnimationsStarted = false;
   let gsapRetryCount = 0;
   function syncTeammateLanguage() {
@@ -1444,7 +1430,11 @@
   function scrollToTarget(target, frameTarget) {
     const node = typeof target === "string" ? qs(target) : target;
     if (!node) return;
+    const setPendingFrameTarget = () => {
+      if (frameTarget) document.body.dataset.frameFocus = frameTarget;
+    };
     if (window.gsap && window.ScrollToPlugin) {
+      setPendingFrameTarget();
       window.gsap.to(window, {
         duration: 0.95,
         ease: "power3.inOut",
@@ -1456,6 +1446,7 @@
         },
       });
     } else {
+      setPendingFrameTarget();
       node.scrollIntoView({ behavior: "smooth", block: "start" });
       if (frameTarget && teammateFrame?.contentWindow) {
         window.setTimeout(() => {
@@ -1474,6 +1465,58 @@
           scrollToTarget(link.dataset.scrollTarget || link.getAttribute("href"), link.dataset.frameTarget || "");
         });
       });
+    }
+
+    if (!dockBound) {
+      dockBound = true;
+      const dockLinks = Array.from(document.querySelectorAll(".dock-link"));
+      const landingLinks = Array.from(document.querySelectorAll(".landing-index-card"));
+      const targets = [
+        { id: "#mainExplorer", frame: "", index: 0 },
+        { id: "#cycleLineSection", frame: "", index: 1 },
+        { id: "#teammateBubbleSection", frame: "bubbleModule", index: 2 },
+        { id: "#teammateBubbleSection", frame: "barModule", index: 3 },
+        { id: "#teammateBubbleSection", frame: "scatterModule", index: 4 },
+        { id: "#teammateBubbleSection", frame: "cardsModule", index: 5 },
+        { id: "#storiesMount", frame: "", index: 6 },
+      ];
+      const activate = (index) => {
+        dockLinks.forEach((link, i) => link.classList.toggle("active", i === index));
+        landingLinks.forEach((link, i) => link.classList.toggle("active", i === index));
+        const progress = Math.max(0.08, Math.min(1, (index + 1) / targets.length));
+        document.documentElement.style.setProperty("--dock-progress", progress.toFixed(3));
+      };
+      const updateDock = () => {
+        const showDock = window.scrollY > Math.max(240, window.innerHeight * 0.48);
+        document.body.classList.toggle("show-dock", showDock);
+        const frameFocus = document.body.dataset.frameFocus || "";
+        let best = 0;
+        let bestDistance = Infinity;
+        targets.forEach((target) => {
+          const node = qs(target.id);
+          if (!node) return;
+          const rect = node.getBoundingClientRect();
+          const distance = Math.abs(rect.top - window.innerHeight * 0.24);
+          if (distance < bestDistance) {
+            bestDistance = distance;
+            best = target.index;
+          }
+        });
+        const teammateRect = qs("#teammateBubbleSection")?.getBoundingClientRect();
+        const teammateVisible =
+          teammateRect && teammateRect.top < window.innerHeight * 0.68 && teammateRect.bottom > window.innerHeight * 0.18;
+        if (frameFocus && teammateVisible) {
+          const frameTarget = targets.find((target) => target.frame === frameFocus);
+          if (frameTarget) best = frameTarget.index;
+        } else if (!teammateVisible) {
+          delete document.body.dataset.frameFocus;
+        }
+        if (qs("#storiesMount")?.getBoundingClientRect().top < window.innerHeight * 0.55) best = 6;
+        activate(best);
+      };
+      window.addEventListener("scroll", updateDock, { passive: true });
+      window.addEventListener("resize", updateDock);
+      updateDock();
     }
 
     if (!window.gsap) {
@@ -1497,7 +1540,18 @@
       ease: "power3.out",
       stagger: 0.08,
     });
-    window.gsap.utils.toArray(".hero, .layout, .cycle-line-card, .teammate-bubble-card").forEach((section) => {
+    window.gsap.to(".landing-scene", {
+      scrollTrigger: { trigger: "#landingHome", start: "top top", end: "bottom top", scrub: 0.8 },
+      yPercent: 18,
+      opacity: 0.42,
+      ease: "none",
+    });
+    window.gsap.to(".landing-title", {
+      scrollTrigger: { trigger: "#landingHome", start: "top top", end: "bottom top", scrub: 0.8 },
+      yPercent: -12,
+      ease: "none",
+    });
+    window.gsap.utils.toArray(".hero, .layout, .cycle-line-card, .teammate-bubble-card, #storiesMount").forEach((section) => {
       window.gsap.from(section, {
         scrollTrigger: { trigger: section, start: "top 82%", once: true },
         y: 42,

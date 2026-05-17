@@ -15,14 +15,32 @@
       --active: #2F2F2F;
       --shadow: 0 14px 32px rgba(0, 0, 0, 0.12);
     }
+    @font-face{
+      font-family:"Fusion Pixel";
+      src:url("assets/fonts/fusion-pixel/fusion-pixel-12px-proportional-zh_hans.otf.woff2") format("woff2");
+      font-weight:400 900;
+      font-style:normal;
+      font-display:swap;
+      unicode-range:U+2E80-2EFF,U+3000-303F,U+31C0-31EF,U+3400-4DBF,U+4E00-9FFF,U+F900-FAFF,U+FF00-FFEF;
+    }
+    @font-face{
+      font-family:"Fusion Pixel";
+      src:url("assets/fonts/fusion-pixel/fusion-pixel-12px-proportional-latin.otf.woff2") format("woff2");
+      font-weight:400 900;
+      font-style:normal;
+      font-display:swap;
+      unicode-range:U+0000-00FF,U+0100-024F,U+1E00-1EFF,U+2000-206F,U+20A0-20CF,U+2100-214F,U+2190-21FF;
+    }
     * { box-sizing: border-box; }
     body {
       margin: 0;
       background: var(--bg);
       color: var(--ink);
-      font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Microsoft YaHei", Arial, sans-serif;
+      font-family: "Fusion Pixel", "Microsoft YaHei", "Segoe UI", Arial, sans-serif;
+      font-synthesis: none;
       line-height: 1.45;
     }
+    body.embedded .site-actions .toolbar { display: none; }
     body.lang-en .cn-text { display: none !important; }
     body.lang-zh .en-text { display: none !important; }
     .page { width: min(1680px, calc(100vw - 40px)); margin: 0 auto; padding: 28px 0 56px; }
@@ -134,7 +152,7 @@
       </div>
     </header>
 
-    <section class="module">
+    <section class="module" id="bubbleModule">
       <div class="module-head">
         <div>
           <h2 data-i18n="bubbleTitle"></h2>
@@ -158,7 +176,7 @@
       </div>
     </section>
 
-    <section class="module">
+    <section class="module" id="barModule">
       <div class="module-head">
         <div>
           <h2 data-i18n="barTitle"></h2>
@@ -178,7 +196,7 @@
       </div>
     </section>
 
-    <section class="module">
+    <section class="module" id="scatterModule">
       <div class="module-head">
         <div>
           <h2 data-i18n="scatterTitle"></h2>
@@ -199,7 +217,7 @@
       </div>
     </section>
 
-    <section class="cards-section">
+    <section class="cards-section" id="cardsModule">
       <div class="cards-intro">
         <div>
           <h2 data-i18n="cardsTitle"></h2>
@@ -288,7 +306,8 @@
     function setLanguage(lang) {
       state.lang = lang;
       document.documentElement.lang = lang === 'zh' ? 'zh-CN' : 'en';
-      document.body.className = 'lang-' + lang;
+      document.body.classList.toggle('lang-zh', lang === 'zh');
+      document.body.classList.toggle('lang-en', lang === 'en');
       document.querySelectorAll('[data-i18n]').forEach(node => {
         const key = node.getAttribute('data-i18n');
         if (L()[key]) node.textContent = L()[key];
@@ -601,6 +620,20 @@
     }
     document.getElementById('zhBtn').addEventListener('click', () => { state.lang = 'zh'; renderAll(); });
     document.getElementById('enBtn').addEventListener('click', () => { state.lang = 'en'; renderAll(); });
+    if (window.parent && window.parent !== window) document.body.classList.add('embedded');
+    window.addEventListener('message', event => {
+      const data = event.data || {};
+      if (data.type === 'birdLang' && (data.lang === 'zh' || data.lang === 'en')) {
+        if (state.lang !== data.lang) {
+          state.lang = data.lang;
+          renderAll();
+        }
+      }
+      if (data.type === 'birdScrollTo' && data.target) {
+        const target = document.getElementById(data.target);
+        if (target) target.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      }
+    });
     renderAll();
     window.addEventListener('resize', () => { clearTimeout(window.__birdResize); window.__birdResize = setTimeout(renderAll, 150); });
   </script>

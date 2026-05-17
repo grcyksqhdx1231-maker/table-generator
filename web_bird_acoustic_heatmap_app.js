@@ -42,8 +42,8 @@
       inspector: "探索面板",
       inspectorLead: "切到探索模式后，把放大镜移到某个格子上，这里会显示该物种的图片、繁殖期、迁徙方向、是否上海本土，以及特殊类别说明。",
       inspectorEmpty: "等待你在热图上悬停某个物种的某个时段。",
-      insightHeading: "洞察证据库",
-      insightLead: "根据 Markdown 重新整理：每条 insight 都可以单独查看，证据来源可以点击跳转；相关物种按钮会直接定位到上方热图中的对应物种。",
+      insightHeading: "Knowledge Insight / 知识洞察",
+      insightLead: "并入 Recorded / observed heatmap：每条知识洞察都可以单独查看，证据来源可以点击跳转；相关物种按钮会直接定位到上方热图中的对应物种。",
       activeModeArrow: "当前：箭头模式",
       activeModeExplore: "当前：探索模式",
       arrowMode: "箭头模式",
@@ -65,8 +65,8 @@
       inspector: "Explorer panel",
       inspectorLead: "Switch to Explore mode and hover over a cell to see the species photo, breeding window, migration direction, local status, and special notes.",
       inspectorEmpty: "Hover over a species-period cell to inspect it.",
-      insightHeading: "Insight Evidence",
-      insightLead: "Insights are reorganized from the Markdown file. Each item can be opened separately, evidence links are clickable, and related species buttons jump back to the heatmap.",
+      insightHeading: "Knowledge Insight",
+      insightLead: "Merged into the Recorded / observed heatmap block. Each insight can be opened separately, evidence links are clickable, and related species buttons jump back to the heatmap.",
       activeModeArrow: "Current: Arrow",
       activeModeExplore: "Current: Explore",
       arrowMode: "Arrow mode",
@@ -413,7 +413,7 @@
             lead: "滚动进入 48 时段热图，在同一套逻辑下比较物种出现、发声和差值，并从留鸟、旅鸟、夏候鸟、冬候鸟的节律里读出上海作为生态节点的角色。",
             start: "开始探索",
             line: "查看折线图",
-            insight: "查看洞察",
+            insight: "查看知识洞察",
             metricA: "个物种进入清洗后的可视化",
             metricB: "个年内阶段用于对齐观测与发声",
             metricC: "张热图：出现、发声、差值",
@@ -421,6 +421,20 @@
             labelA: "夏候鸟 / Summer",
             labelB: "冬候鸟 / Winter",
             labelC: "旅鸟 / Passage",
+            indexHeatmap: "记录热图",
+            indexHeatmapDesc: "出现、发声、差值三种热图",
+            indexLine: "活动频率折线",
+            indexLineDesc: "四类鸟 48 阶段观测趋势",
+            indexBubble: "环形气泡图",
+            indexBubbleDesc: "出现记录与发声记录分布",
+            indexBar: "气泡条形图",
+            indexBarDesc: "发声记录与出现记录对照",
+            indexScatter: "四象限散点图",
+            indexScatterDesc: "常见/常叫关系分布",
+            indexCards: "典型物种图鉴",
+            indexCardsDesc: "图片、声音与代表物种",
+            indexInsight: "Knowledge Insight",
+            indexInsightDesc: "热图证据与生态解释",
           }
         : {
             brand: "Shanghai Birds / Acoustic Cycle",
@@ -430,7 +444,7 @@
             lead: "Scroll into the 48-period heatmaps to compare occurrence, acoustic records, and their difference under one shared logic, then read Shanghai's ecological role through residents, passage migrants, summer visitors, and winter visitors.",
             start: "Start exploring",
             line: "View line chart",
-            insight: "View insights",
+            insight: "View knowledge insight",
             metricA: "cleaned species in the visualization",
             metricB: "within-year periods aligning occurrence and sound",
             metricC: "heatmaps: occurrence, sound, difference",
@@ -438,6 +452,20 @@
             labelA: "Summer visitors",
             labelB: "Winter visitors",
             labelC: "Passage migrants",
+            indexHeatmap: "Recorded heatmap",
+            indexHeatmapDesc: "Observed, acoustic, and difference views",
+            indexLine: "Activity lines",
+            indexLineDesc: "48-period trends by residency type",
+            indexBubble: "Circular bubble chart",
+            indexBubbleDesc: "Occurrence and sound distribution",
+            indexBar: "Bubble bar chart",
+            indexBarDesc: "Sound records against occurrence records",
+            indexScatter: "Quadrant scatter plot",
+            indexScatterDesc: "Commonness and vocal activity",
+            indexCards: "Representative species",
+            indexCardsDesc: "Photos, audio, and species profiles",
+            indexInsight: "Knowledge Insight",
+            indexInsightDesc: "Heatmap evidence and ecological meaning",
           };
     const setText = (selector, value) => {
       const node = qs(selector);
@@ -473,6 +501,20 @@
     setText("#landingLabelA", landing.labelA);
     setText("#landingLabelB", landing.labelB);
     setText("#landingLabelC", landing.labelC);
+    setText("#landingIndexHeatmap", landing.indexHeatmap);
+    setText("#landingIndexHeatmapDesc", landing.indexHeatmapDesc);
+    setText("#landingIndexLine", landing.indexLine);
+    setText("#landingIndexLineDesc", landing.indexLineDesc);
+    setText("#landingIndexBubble", landing.indexBubble);
+    setText("#landingIndexBubbleDesc", landing.indexBubbleDesc);
+    setText("#landingIndexBar", landing.indexBar);
+    setText("#landingIndexBarDesc", landing.indexBarDesc);
+    setText("#landingIndexScatter", landing.indexScatter);
+    setText("#landingIndexScatterDesc", landing.indexScatterDesc);
+    setText("#landingIndexCards", landing.indexCards);
+    setText("#landingIndexCardsDesc", landing.indexCardsDesc);
+    setText("#landingIndexInsight", landing.indexInsight);
+    setText("#landingIndexInsightDesc", landing.indexInsightDesc);
   }
 
   function insightText(insight) {
@@ -1385,11 +1427,87 @@
       // Ignore storage failures on restricted file:// contexts.
     }
     renderAll();
+    syncTeammateLanguage();
   }
 
   window.switchBirdHeatmapLanguage = switchLanguage;
 
   const teammateFrame = qs("#teammateBubbleFrame");
+  let scrollLinksBound = false;
+  let scrollAnimationsStarted = false;
+  let gsapRetryCount = 0;
+  function syncTeammateLanguage() {
+    if (!teammateFrame?.contentWindow) return;
+    teammateFrame.contentWindow.postMessage({ type: "birdLang", lang: state.lang }, "*");
+  }
+
+  function scrollToTarget(target, frameTarget) {
+    const node = typeof target === "string" ? qs(target) : target;
+    if (!node) return;
+    if (window.gsap && window.ScrollToPlugin) {
+      window.gsap.to(window, {
+        duration: 0.95,
+        ease: "power3.inOut",
+        scrollTo: { y: node, offsetY: 18 },
+        onComplete: () => {
+          if (frameTarget && teammateFrame?.contentWindow) {
+            teammateFrame.contentWindow.postMessage({ type: "birdScrollTo", target: frameTarget }, "*");
+          }
+        },
+      });
+    } else {
+      node.scrollIntoView({ behavior: "smooth", block: "start" });
+      if (frameTarget && teammateFrame?.contentWindow) {
+        window.setTimeout(() => {
+          teammateFrame.contentWindow.postMessage({ type: "birdScrollTo", target: frameTarget }, "*");
+        }, 520);
+      }
+    }
+  }
+
+  function initScrollExperience() {
+    if (!scrollLinksBound) {
+      scrollLinksBound = true;
+      document.querySelectorAll("[data-scroll-target]").forEach((link) => {
+        link.addEventListener("click", (event) => {
+          event.preventDefault();
+          scrollToTarget(link.dataset.scrollTarget || link.getAttribute("href"), link.dataset.frameTarget || "");
+        });
+      });
+    }
+
+    if (!window.gsap) {
+      window.setTimeout(() => {
+        if (window.gsap || gsapRetryCount < 6) {
+          gsapRetryCount += 1;
+          initScrollExperience();
+        }
+      }, 900);
+      return;
+    }
+    if (scrollAnimationsStarted) return;
+    scrollAnimationsStarted = true;
+    if (window.ScrollTrigger) window.gsap.registerPlugin(window.ScrollTrigger);
+    if (window.ScrollToPlugin) window.gsap.registerPlugin(window.ScrollToPlugin);
+
+    window.gsap.from(".landing-content > *", {
+      y: 34,
+      opacity: 0,
+      duration: 0.9,
+      ease: "power3.out",
+      stagger: 0.08,
+    });
+    window.gsap.utils.toArray(".hero, .layout, .cycle-line-card, .teammate-bubble-card").forEach((section) => {
+      window.gsap.from(section, {
+        scrollTrigger: { trigger: section, start: "top 82%", once: true },
+        y: 42,
+        opacity: 0,
+        duration: 0.82,
+        ease: "power3.out",
+      });
+    });
+  }
+
   if (teammateFrame) {
     const syncTeammateFrameHeight = () => {
       try {
@@ -1402,6 +1520,7 @@
       }
     };
     teammateFrame.addEventListener("load", () => {
+      syncTeammateLanguage();
       syncTeammateFrameHeight();
       window.setTimeout(syncTeammateFrameHeight, 400);
       window.setTimeout(syncTeammateFrameHeight, 1200);
@@ -1420,4 +1539,6 @@
   renderSpeciesList();
   bindInputs();
   renderAll();
+  syncTeammateLanguage();
+  initScrollExperience();
 })();

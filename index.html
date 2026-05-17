@@ -162,6 +162,59 @@
       margin-top:32px;
       align-items:center;
     }
+    .landing-index{
+      width:min(900px,100%);
+      margin-top:22px;
+      display:grid;
+      grid-template-columns:repeat(4,minmax(0,1fr));
+      gap:8px;
+    }
+    .landing-index-card{
+      position:relative;
+      min-height:82px;
+      padding:12px 12px 14px;
+      border:1px solid rgba(0,0,0,.14);
+      border-radius:var(--radius);
+      background:rgba(255,255,255,.62);
+      color:var(--ink);
+      text-decoration:none;
+      overflow:hidden;
+      box-shadow:0 1px 0 rgba(255,255,255,.78) inset,0 12px 32px rgba(0,0,0,.055);
+      transition:transform .18s ease,border-color .18s ease,background .18s ease,box-shadow .18s ease;
+    }
+    .landing-index-card::before{
+      content:"";
+      position:absolute;
+      left:0;
+      right:0;
+      top:0;
+      height:4px;
+      background:var(--resident);
+    }
+    .landing-index-card:nth-child(2)::before{background:var(--summer)}
+    .landing-index-card:nth-child(3)::before{background:var(--winter)}
+    .landing-index-card:nth-child(4)::before{background:var(--passage)}
+    .landing-index-card:nth-child(5)::before{background:var(--resident)}
+    .landing-index-card:nth-child(6)::before{background:var(--summer)}
+    .landing-index-card:nth-child(7)::before{background:var(--winter)}
+    .landing-index-card:hover{
+      transform:translateY(-3px);
+      border-color:rgba(0,0,0,.34);
+      background:rgba(255,255,255,.82);
+      box-shadow:0 18px 40px rgba(0,0,0,.09);
+    }
+    .landing-index-card strong{
+      display:block;
+      margin-bottom:8px;
+      font-size:13px;
+      line-height:1.25;
+    }
+    .landing-index-card span{
+      display:block;
+      color:var(--muted);
+      font-size:11px;
+      line-height:1.35;
+    }
     .landing-cta{
       display:inline-flex;
       align-items:center;
@@ -700,6 +753,8 @@
     }
     #storiesMount{
       margin-top:22px;
+      padding-top:22px;
+      border-top:1px solid var(--line);
       position:relative;
       overflow:hidden;
     }
@@ -1077,6 +1132,7 @@
     @media (max-width: 1280px){
       .landing-title{font-size:72px}
       .landing-heat-preview{right:2%;opacity:.76}
+      .landing-index{grid-template-columns:repeat(2,minmax(0,1fr))}
       .layout{grid-template-columns:1fr}
       .inspector{position:static}
       .insight-explorer{grid-template-columns:1fr}
@@ -1089,6 +1145,7 @@
       .landing-heat-preview{position:relative;right:auto;top:auto;width:100%;max-width:none;margin-top:34px;transform:none}
       .landing-routes{inset:auto -18% 4% 20%;width:110%;height:42%;opacity:.62}
       .landing-metrics{grid-template-columns:1fr}
+      .landing-index{grid-template-columns:1fr}
       .landing-label{display:none}
       .landing-scroll{display:none}
       .teammate-frame{min-height:1200px}
@@ -1134,11 +1191,41 @@
       <h1 class="landing-title" id="landingTitle">从记录到声音，探索上海鸟类的年周期</h1>
       <p class="landing-lead" id="landingLead">滚动进入 48 时段热图，在同一套逻辑下比较物种出现、发声和差值，并从留鸟、旅鸟、夏候鸟、冬候鸟的节律里读出上海作为生态节点的角色。</p>
       <div class="landing-actions">
-        <a class="landing-cta primary" id="landingStart" href="#mainExplorer"><span id="landingStartText">开始探索</span><span class="arrow">↓</span></a>
-        <a class="landing-cta" id="landingLineLink" href="#cycleLineSection">查看折线图</a>
-        <a class="landing-cta" id="landingBubbleLink" href="#teammateBubbleSection">查看综合气泡图</a>
-        <a class="landing-cta" id="landingInsightLink" href="#storiesMount">查看洞察</a>
+        <a class="landing-cta primary" id="landingStart" href="#mainExplorer" data-scroll-target="#mainExplorer"><span id="landingStartText">开始探索</span><span class="arrow">↓</span></a>
+        <a class="landing-cta" id="landingLineLink" href="#cycleLineSection" data-scroll-target="#cycleLineSection">查看折线图</a>
+        <a class="landing-cta" id="landingBubbleLink" href="#teammateBubbleSection" data-scroll-target="#teammateBubbleSection">查看综合气泡图</a>
+        <a class="landing-cta" id="landingInsightLink" href="#storiesMount" data-scroll-target="#storiesMount">查看洞察</a>
       </div>
+      <nav class="landing-index" id="landingIndex" aria-label="Visualization section index">
+        <a class="landing-index-card" href="#mainExplorer" data-scroll-target="#mainExplorer">
+          <strong id="landingIndexHeatmap">记录热图</strong>
+          <span id="landingIndexHeatmapDesc">出现、发声、差值三种热图</span>
+        </a>
+        <a class="landing-index-card" href="#cycleLineSection" data-scroll-target="#cycleLineSection">
+          <strong id="landingIndexLine">活动频率折线</strong>
+          <span id="landingIndexLineDesc">四类鸟 48 阶段观测趋势</span>
+        </a>
+        <a class="landing-index-card" href="#teammateBubbleSection" data-scroll-target="#teammateBubbleSection" data-frame-target="bubbleModule">
+          <strong id="landingIndexBubble">环形气泡图</strong>
+          <span id="landingIndexBubbleDesc">出现记录与发声记录分布</span>
+        </a>
+        <a class="landing-index-card" href="#teammateBubbleSection" data-scroll-target="#teammateBubbleSection" data-frame-target="barModule">
+          <strong id="landingIndexBar">气泡条形图</strong>
+          <span id="landingIndexBarDesc">发声记录与出现记录对照</span>
+        </a>
+        <a class="landing-index-card" href="#teammateBubbleSection" data-scroll-target="#teammateBubbleSection" data-frame-target="scatterModule">
+          <strong id="landingIndexScatter">四象限散点图</strong>
+          <span id="landingIndexScatterDesc">常见/常叫关系分布</span>
+        </a>
+        <a class="landing-index-card" href="#teammateBubbleSection" data-scroll-target="#teammateBubbleSection" data-frame-target="cardsModule">
+          <strong id="landingIndexCards">典型物种图鉴</strong>
+          <span id="landingIndexCardsDesc">图片、声音与代表物种</span>
+        </a>
+        <a class="landing-index-card" href="#storiesMount" data-scroll-target="#storiesMount">
+          <strong id="landingIndexInsight">Knowledge Insight</strong>
+          <span id="landingIndexInsightDesc">热图证据与生态解释</span>
+        </a>
+      </nav>
       <div class="landing-metrics" aria-label="Dataset summary">
         <div class="landing-metric">
           <strong>229</strong>
@@ -1217,6 +1304,19 @@
         <div class="heatmap-shell arrow-mode" id="heatmapShell">
           <div id="heatmapMount"></div>
         </div>
+        <section class="insight-shell heatmap-insight" id="storiesMount">
+          <div class="insight-head">
+            <div>
+              <h2 id="insightHeading">Knowledge Insight</h2>
+              <p id="insightLead">根据你给的 Markdown 重新整理：每条 insight 都可以单独查看，证据来源可以点击跳转；相关物种按钮会直接定位到上方热图中的对应物种。</p>
+            </div>
+            <div class="insight-source-note">Source: bird_visualization_insight_evidence.md</div>
+          </div>
+          <div class="insight-explorer">
+            <nav class="insight-list" id="insightList" aria-label="Insight list"></nav>
+            <article class="insight-detail" id="insightDetail"></article>
+          </div>
+        </section>
       </div>
 
       <aside class="card inspector">
@@ -1259,25 +1359,15 @@
       <p class="teammate-frame-note" id="teammateBubbleNote">图片与声音资源已放在同目录的 photo/ 和 sound/ 文件夹中；如果浏览器限制自动播放，点击卡片中的播放器即可手动播放。</p>
     </section>
 
-    <section class="card insight-shell" id="storiesMount">
-      <div class="insight-head">
-        <div>
-          <h2 id="insightHeading">洞察证据库</h2>
-          <p id="insightLead">根据你给的 Markdown 重新整理：每条 insight 都可以单独查看，证据来源可以点击跳转；相关物种按钮会直接定位到上方热图中的对应物种。</p>
-        </div>
-        <div class="insight-source-note">Source: bird_visualization_insight_evidence.md</div>
-      </div>
-      <div class="insight-explorer">
-        <nav class="insight-list" id="insightList" aria-label="Insight list"></nav>
-        <article class="insight-detail" id="insightDetail"></article>
-      </div>
-    </section>
   </div>
 
   <div class="tooltip" id="tooltip"></div>
 
+  <script defer src="https://cdn.jsdelivr.net/npm/gsap@3.12.5/dist/gsap.min.js"></script>
+  <script defer src="https://cdn.jsdelivr.net/npm/gsap@3.12.5/dist/ScrollTrigger.min.js"></script>
+  <script defer src="https://cdn.jsdelivr.net/npm/gsap@3.12.5/dist/ScrollToPlugin.min.js"></script>
   <script src="web_bird_acoustic_heatmap_data.js"></script>
-  <script src="web_bird_acoustic_heatmap_app.js?v=20260517-bubblemerge1"></script>
+  <script src="web_bird_acoustic_heatmap_app.js?v=20260517-unified1"></script>
   <script>
     (function () {
       function fallbackToggleLanguage() {

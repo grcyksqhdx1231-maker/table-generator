@@ -1459,7 +1459,7 @@
     if (!teammateFrame?.contentWindow) return null;
     try {
       const doc = teammateFrame.contentDocument || teammateFrame.contentWindow.document;
-      const frameScrollY = teammateFrame.contentWindow.scrollY || doc.documentElement.scrollTop || doc.body?.scrollTop || 0;
+      const frameRect = teammateFrame.getBoundingClientRect();
       const modules = [
         { id: "bubbleModule", index: 2 },
         { id: "barModule", index: 3 },
@@ -1471,8 +1471,8 @@
       modules.forEach((module) => {
         const node = doc.getElementById(module.id);
         if (!node) return;
-        const top = node.offsetTop - frameScrollY;
-        const distance = Math.abs(top - 80);
+        const topInParentViewport = frameRect.top + node.offsetTop;
+        const distance = Math.abs(topInParentViewport - window.innerHeight * 0.28);
         if (distance < bestDistance) {
           bestDistance = distance;
           best = module.index;

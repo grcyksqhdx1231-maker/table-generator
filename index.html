@@ -189,7 +189,7 @@
     .landing-index-card:nth-child(4)::before{background:var(--passage)}
     .landing-index-card:nth-child(5)::before{background:var(--resident)}
     .landing-index-card:nth-child(6)::before{background:var(--summer)}
-    .landing-index-card:nth-child(7)::before{background:var(--winter)}
+    .landing-index-card:nth-child(7)::before{background:linear-gradient(90deg,var(--resident),var(--summer),var(--winter),var(--passage))}
     .landing-index-card:hover{
       transform:translateY(-3px);
       border-color:rgba(0,0,0,.34);
@@ -387,7 +387,7 @@
       content:"";
       position:absolute;
       left:-1px;
-      top:calc(10px + var(--dock-active-index,0) * 48px);
+      top:calc(10px + var(--dock-active-index,0) * 49px);
       width:6px;
       height:38px;
       border-radius:999px;
@@ -1319,9 +1319,6 @@
     <button class="dock-link" type="button" data-scroll-target="#teammateBubbleSection" data-frame-target="cardsModule">
       <strong>06</strong><span id="dockCards">典型物种图鉴</span>
     </button>
-    <button class="dock-link" type="button" data-scroll-target="#storiesMount">
-      <strong>07</strong><span id="dockInsight">Knowledge Insight</span>
-    </button>
   </nav>
 
   <div class="wrap" id="mainExplorer">
@@ -1447,7 +1444,7 @@
   <script defer src="https://cdn.jsdelivr.net/npm/gsap@3.12.5/dist/ScrollTrigger.min.js"></script>
   <script defer src="https://cdn.jsdelivr.net/npm/gsap@3.12.5/dist/ScrollToPlugin.min.js"></script>
   <script src="web_bird_acoustic_heatmap_data.js"></script>
-  <script src="web_bird_acoustic_heatmap_app.js?v=20260517-paneldock1"></script>
+  <script src="web_bird_acoustic_heatmap_app.js?v=20260517-sixdock1"></script>
   <script>
     (function () {
       function fallbackToggleLanguage() {

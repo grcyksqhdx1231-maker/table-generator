@@ -499,7 +499,6 @@
     setText("#dockBar", landing.indexBar);
     setText("#dockScatter", landing.indexScatter);
     setText("#dockCards", landing.indexCards);
-    setText("#dockInsight", landing.indexInsight);
   }
 
   function insightText(insight) {
@@ -1456,6 +1455,35 @@
     }
   }
 
+  function activeTeammateFrameIndex() {
+    if (!teammateFrame?.contentWindow) return null;
+    try {
+      const doc = teammateFrame.contentDocument || teammateFrame.contentWindow.document;
+      const frameScrollY = teammateFrame.contentWindow.scrollY || doc.documentElement.scrollTop || doc.body?.scrollTop || 0;
+      const modules = [
+        { id: "bubbleModule", index: 2 },
+        { id: "barModule", index: 3 },
+        { id: "scatterModule", index: 4 },
+        { id: "cardsModule", index: 5 },
+      ];
+      let best = modules[0].index;
+      let bestDistance = Infinity;
+      modules.forEach((module) => {
+        const node = doc.getElementById(module.id);
+        if (!node) return;
+        const top = node.offsetTop - frameScrollY;
+        const distance = Math.abs(top - 80);
+        if (distance < bestDistance) {
+          bestDistance = distance;
+          best = module.index;
+        }
+      });
+      return best;
+    } catch (error) {
+      return null;
+    }
+  }
+
   function initScrollExperience() {
     if (!scrollLinksBound) {
       scrollLinksBound = true;
@@ -1478,7 +1506,6 @@
         { id: "#teammateBubbleSection", frame: "barModule", index: 3 },
         { id: "#teammateBubbleSection", frame: "scatterModule", index: 4 },
         { id: "#teammateBubbleSection", frame: "cardsModule", index: 5 },
-        { id: "#storiesMount", frame: "", index: 6 },
       ];
       const activate = (index) => {
         dockLinks.forEach((link, i) => link.classList.toggle("active", i === index));
@@ -1510,18 +1537,30 @@
         const teammateRect = qs("#teammateBubbleSection")?.getBoundingClientRect();
         const teammateVisible =
           teammateRect && teammateRect.top < window.innerHeight * 0.68 && teammateRect.bottom > window.innerHeight * 0.18;
-        if (frameFocus && teammateVisible) {
+        const teammateFrameIndex = teammateVisible ? activeTeammateFrameIndex() : null;
+        if (teammateFrameIndex !== null) {
+          best = teammateFrameIndex;
+        } else if (frameFocus && teammateVisible) {
           const frameTarget = targets.find((target) => target.frame === frameFocus);
           if (frameTarget) best = frameTarget.index;
         } else if (!teammateVisible) {
           delete document.body.dataset.frameFocus;
         }
-        if (qs("#storiesMount")?.getBoundingClientRect().top < window.innerHeight * 0.55) best = 6;
         activate(best);
       };
       window.addEventListener("scroll", updateDock, { passive: true });
       window.addEventListener("resize", updateDock);
       updateDock();
+      if (teammateFrame) {
+        teammateFrame.addEventListener("load", () => {
+          try {
+            teammateFrame.contentWindow?.addEventListener("scroll", updateDock, { passive: true });
+          } catch (error) {
+            // Same-origin file/http pages allow this; ignore if a browser blocks it.
+          }
+          updateDock();
+        });
+      }
     }
 
     if (!window.gsap) {

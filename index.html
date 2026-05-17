@@ -360,10 +360,18 @@
       transform:translate(24px,-50%);
       transition:opacity .22s ease,transform .22s ease;
     }
+    body.in-heatmap-section .scroll-dock{
+      top:auto;
+      bottom:18px;
+      transform:translate(24px,0);
+    }
     body.show-dock .scroll-dock{
       opacity:1;
       pointer-events:auto;
       transform:translate(0,-50%);
+    }
+    body.show-dock.in-heatmap-section .scroll-dock{
+      transform:translate(0,0);
     }
     .scroll-dock::before{
       content:"";
@@ -374,9 +382,18 @@
       width:4px;
       border-radius:var(--radius) 0 0 var(--radius);
       background:linear-gradient(180deg,var(--resident),var(--summer),var(--winter),var(--passage));
-      transform:scaleY(var(--dock-progress,.08));
-      transform-origin:top;
-      transition:transform .12s linear;
+    }
+    .scroll-dock::after{
+      content:"";
+      position:absolute;
+      left:-1px;
+      top:calc(10px + var(--dock-active-index,0) * 48px);
+      width:6px;
+      height:38px;
+      border-radius:999px;
+      background:linear-gradient(180deg,var(--summer),var(--resident));
+      box-shadow:0 0 18px rgba(255,187,30,.62),0 0 24px rgba(118,226,136,.34);
+      transition:top .26s cubic-bezier(.2,.8,.2,1),height .2s ease;
     }
     .dock-link{
       width:100%;
@@ -392,7 +409,7 @@
       font:inherit;
       text-align:left;
       cursor:pointer;
-      transition:background .16s ease,border-color .16s ease,transform .16s ease;
+      transition:background .18s ease,border-color .18s ease,transform .18s ease,box-shadow .18s ease;
     }
     .dock-link strong{
       color:var(--muted);
@@ -407,11 +424,19 @@
       line-height:1.25;
     }
     .dock-link:hover,.dock-link.active{
-      background:rgba(255,255,255,.82);
-      border-color:rgba(0,0,0,.16);
+      background:rgba(255,255,255,.88);
+      border-color:rgba(0,0,0,.18);
       transform:translateX(-2px);
     }
-    .dock-link.active strong{color:#111}
+    .dock-link.active{
+      border-color:rgba(0,0,0,.32);
+      box-shadow:0 0 0 2px rgba(255,187,30,.22),0 10px 26px rgba(0,0,0,.10);
+      background:linear-gradient(90deg,rgba(255,187,30,.18),rgba(255,255,255,.92) 38%,rgba(118,226,136,.14));
+    }
+    .dock-link.active strong{
+      color:#111;
+      text-shadow:0 0 10px rgba(255,187,30,.42);
+    }
     @keyframes routeFlow{
       to{stroke-dashoffset:-104}
     }
@@ -686,6 +711,16 @@
     .inspector{
       position:sticky;
       top:18px;
+      align-self:start;
+      opacity:0;
+      transform:translateY(12px);
+      pointer-events:none;
+      transition:opacity .22s ease,transform .22s ease;
+    }
+    body.in-heatmap-section .inspector{
+      opacity:1;
+      transform:translateY(0);
+      pointer-events:auto;
     }
     .inspector h2{
       margin:0 0 12px;
@@ -1412,7 +1447,7 @@
   <script defer src="https://cdn.jsdelivr.net/npm/gsap@3.12.5/dist/ScrollTrigger.min.js"></script>
   <script defer src="https://cdn.jsdelivr.net/npm/gsap@3.12.5/dist/ScrollToPlugin.min.js"></script>
   <script src="web_bird_acoustic_heatmap_data.js"></script>
-  <script src="web_bird_acoustic_heatmap_app.js?v=20260517-scrollnav1"></script>
+  <script src="web_bird_acoustic_heatmap_app.js?v=20260517-paneldock1"></script>
   <script>
     (function () {
       function fallbackToggleLanguage() {

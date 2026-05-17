@@ -1485,10 +1485,15 @@
         landingLinks.forEach((link, i) => link.classList.toggle("active", i === index));
         const progress = Math.max(0.08, Math.min(1, (index + 1) / targets.length));
         document.documentElement.style.setProperty("--dock-progress", progress.toFixed(3));
+        document.documentElement.style.setProperty("--dock-active-index", String(index));
       };
       const updateDock = () => {
         const showDock = window.scrollY > Math.max(240, window.innerHeight * 0.48);
         document.body.classList.toggle("show-dock", showDock);
+        const heatmapLayoutRect = qs(".layout")?.getBoundingClientRect();
+        const inHeatmapSection =
+          heatmapLayoutRect && heatmapLayoutRect.top < window.innerHeight * 0.72 && heatmapLayoutRect.bottom > window.innerHeight * 0.16;
+        document.body.classList.toggle("in-heatmap-section", Boolean(inHeatmapSection));
         const frameFocus = document.body.dataset.frameFocus || "";
         let best = 0;
         let bestDistance = Infinity;
